@@ -1,5 +1,7 @@
 # Hamradio_copilot
 
+Developed on the base of idea by Rudy, N2WQ - TNX
+
 See live demo for ITU zone 28: https://azure.s53m.com/matrigs-desktop/copilot/
 
 ## DX Cluster Data Analysis Scripts: Readme
