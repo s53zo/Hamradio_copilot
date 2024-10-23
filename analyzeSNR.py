@@ -644,6 +644,7 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
                     }},
                     allowHTML: true,
                     interactive: true,
+                    maxWidth: 'none',
                     animation: 'scale',
                     placement: 'top',
                     theme: 'light',
