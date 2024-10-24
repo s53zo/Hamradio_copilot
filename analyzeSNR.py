@@ -198,7 +198,6 @@ def slope_to_unicode(slope):
 def compute_slope(df, zone, band):
     """
     Computes the slope of SNR over time for a given zone and band.
-
     :param df: The dataframe containing SNR data.
     :param zone: The zone to filter on.
     :param band: The band to filter on.
@@ -210,20 +209,21 @@ def compute_slope(df, zone, band):
     if len(relevant_spots) < 2:
         return np.nan  # Not enough data points to compute a slope
 
-    # Convert timestamps to numerical values (e.g., Unix timestamp)
-    time_values = relevant_spots['timestamp'].astype('int64') // 1e9  # Convert to seconds
-    snr_values = relevant_spots['snr']
+    # Convert timestamps to numerical values (e.g., Unix timestamp in minutes)
+    relevant_spots['minute'] = relevant_spots['timestamp'].dt.floor('min')  # Round to nearest minute
+    avg_per_minute = relevant_spots.groupby('minute')['snr'].mean().reset_index()
 
-    # Check if all time_values are identical
-    if time_values.nunique() == 1:
-        # All timestamps are identical; cannot compute slope
-        return 0  # or np.nan, depending on how you want to handle it
+    if len(avg_per_minute) < 2:
+        return np.nan
+
+    time_values = avg_per_minute['minute'].astype(np.int64) // 1e9 / 60  # Convert to minutes
+    snr_values = avg_per_minute['snr']
 
     # Perform linear regression
     slope, intercept, r_value, p_value, std_err = linregress(time_values, snr_values)
 
     return slope
-    
+        
 def combine_snr_count(snr, count, band, zone, df, row_index):
     if pd.isna(snr) and count == 0:
         return "", None
