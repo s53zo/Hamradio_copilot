@@ -13,6 +13,7 @@ import sqlite3
 import numpy as np  # Needed for numeric operations
 import html  # For escaping HTML content
 from matplotlib.colors import LinearSegmentedColormap  # For custom colormap
+from scipy.stats import linregress  # For linear regression
 
 pd.set_option('display.max_columns', None)
 pd.set_option('display.max_rows', None)
@@ -46,16 +47,49 @@ include_solar_data = args.include_solar_data  # Get the include_solar_data flag
 
 #band_order = ['160', '80', '40', '30', '20', '17', '15', '12', '10', '6']
 band_order = ['160', '80', '40', '20', '15', '10']
+
 # Mapping zone numbers to descriptions...
 zone_name_map = {
-    1: "North America",
-    2: "South America",
-    3: "Europe",
-    4: "Africa",
-    5: "Asia",
-    6: "Oceania",
-    7: "Middle East",
-    # ... (add all zones as needed)
+    1: 'Northwestern Zone of North America: KL (Alaska), VY1/VE8 Yukon, the Northwest and Nunavut Territories west of 102 degrees (Includes the islands of Victoria, Banks, Melville, and Prince Patrick).',
+    2: 'Northeastern Zone of North America: VO2 Labrador, the portion of VE2 Quebec north of the 50th parallel, the VE8 Northwest and Nunavut Territories east of 102 degrees (Includes the islands of King Christian, King William, Prince of Wales, Somerset, Bathurst, Devon, Ellesmere, Baffin and the Melville and Boothia Peninsulas, excluding Akimiski Island).',
+    3: 'Western Zone of North America: VE7, W6, and the W7 states of Arizona, Idaho, Nevada, Oregon, Utah, and Washington.',
+    4: 'Central Zone of North America: VE3, VE4, VE5, VE6, VE8 Akimiski Island, and W7 states of Montana and Wyoming. W0, W9, W8 (except West Virginia), W5, and the W4 states of Alabama, Tennessee, and Kentucky.',
+    5: 'Eastern Zone of North America: 4U1UN, CY9, CY0, FP, VE1, VE9, VY2, VO1 and the portion of VE2 Quebec south of the **th parallel. VP9, W1, W2, W3 and the W4 states of Florida, Georgia, South Carolina, North Carolina, Virginia and the W8 state of West Virginia.',
+    6: 'Southern Zone of North America: XE/XF, XF4 (Revilla Gigedo).',
+    7: 'Central American Zone: FO (Clipperton), HK0 (San Andres and Providencia), HP, HR, TG, TI, TI9, V3, YN and YS.',
+    8: 'West Indies Zone: C6, CO, FG, FJ, FM, FS, HH, HI, J3, J6, J7, J8, KG4 (Guantanamo), KP1, KP2, KP4, KP5, PJ (Saba, St. Maarten, St. Eustatius), V2, V4, VP2, VP5, YV0 (Aves Is.), ZF, and 8P.',
+    9: 'Northern Zone of South America: FY, HK, HK0 (Malpelo), P4, PJ (Bonaire, Curacao), PZ, YV, 8R, and 9Y.',
+    10: 'Western Zone of South America: CP, HC, HC8, and OA.',
+    11: 'Central Zone of South America: PY, PY0, and ZP.',
+    12: 'Southwest Zone of South America: 3Y (Peter I), CE, CE0 (Easter Is., Juan Fernandez Is.), and some Antarctic stations.',
+    13: 'Southeast Zone of South America: CX, LU, VP8 Islands, and some Antarctic stations.',
+    14: 'Western Zone of Europe: C3, CT, CU, DL, EA, EA6, El, F, G, GD, GI, GJ, GM. GU, GW, HB, HB0, LA, LX, ON, OY, OZ, PA, SM, ZB, 3A and 4U1ITU.',
+    15: 'Central European Zone: ES, HA, HV, I, IS0, LY, OE, OH, OH0, OJ0, OK, OM, S5, SP, T7, T9, TK, UA2, YL, YU, ZA, 1A0, Z3, 9A, 9H and 4U1VIC.',
+    16: 'Eastern Zone of Europe: UR-UZ, EU-EW, ER, UA1, UA3, UA4, UA6, UA9 (S, T, W), and R1MV (Malyj Vysotskij).',
+    17: 'Western Zone of Siberia: EZ, EY, EX, UA9 (A, C, F, G, J, K, L, M, Q, X) UK, UN-UQ, UH, UI and UJ-UM.',
+    18: 'Central Siberian Zone: UA8 (T, V), UA9 (H, O, U, Y, Z), and UA0 (A, B, H, O, S, U, W).',
+    19: 'Eastern Siberian Zone: UA0 (C, D, E, I, J, K, L, Q, X, Z).',
+    20: 'Balkan Zone: E4, JY, LZ, OD, SV, SV5, SV9, SV/A, TA, YK, YO, ZC4, 4X and 5B.',
+    21: 'Southwestern Zone of Asia: 4J, 4K, 4L, A4, A6, A7, A9, AP, EK, EP, HZ, YA, YI, 7O and 9K.',
+    22: 'Southern Zone of Asia: A5, S2, VU, VU (Lakshadweep Is.), 4S, 8Q, and 9N.',
+    23: 'Central Zone of Asia: JT, UA0Y, BY3G-L (Nei Mongol), BY9, BY0.',
+    24: 'Eastern Zone of Asia: BQ9 (Pratas), BV, BY1, BY2, BY3A-F (Tian Jin), BY3M-R (He Bei), BY3S-X (Shan Xi), BY4, BY5, BY6, BY7, BY8, VR and XX.',
+    25: 'Japanese Zone: HL, JA and P5.',
+    26: 'Southeastern Zone of Asia: HS, VU (Andaman and Nicobar Islands), XV(3W), XU, XW, XZ and 1S (Spratly Islands).',
+    27: 'Philippine Zone: DU (Philippines), JD1 (Minami Torishima), JD1 (Ogasawara), T8(KC6) (Palau), KH2 (Guam), KH0 (Marianas Is.), V6 (Fed. States of Micronesia) and BS7 (Scarborough Reef).',
+    28: 'Indonesian Zone: H4, P2, V8, YB, 4W (East Timor), 9M and 9V.',
+    29: 'Western Zone of Australia: VK6, VK8, VK9X (Christmas Is.), VK9C (Cocos-Keeling Is.) and some Antarctic stations.',
+    30: 'Eastern Zone of Australia: FK/C (Chesterfield), VK1-5, VK7, VK9L (Lord Howe Is.), VK9W (Willis Is.), VK9M (Mellish Reef), VK0 (Macquarie Is.) and some Antarctic stations.',
+    31: 'Central Pacific Zone: C2, FO (Marquesas), KH1, KH3, KH4, KH5, KH5K, KH6, KH7, KH7K, KH9, T2, T3, V7 and ZK3.',
+    32: 'New Zealand Zone: A3, FK (except Chesterfield), FO (except Marquesas and Clipperton), FW, H40(Temotu), KH8, VK9N (Norfolk Is.) VP6 (Pitcairn and Ducie), YJ, ZK1, ZK2, ZL, ZL7, ZL8, 3D2, 5W and some Antarctic stations.',
+    33: 'Northwestern Zone of Africa: CN, CT3, EA8, EA9, IG9, IH9 (Pantelleria Is.), S0, 3V and 7X.',
+    34: 'Northeastern Zone of Africa: ST, SU and 5A.',
+    35: 'Central Zone of Africa: C5, D4, EL J5, TU, TY, TZ, XT, 3X, 5N, 5T, 5U, 5V, 6W, 9G and 9L.',
+    36: 'Equatorial Zone of Africa: D2, TJ, TL, TN, S9, TR, TT, ZD7, ZD8, 3C, 3C0, **, 9Q, 9U and 9X.',
+    37: 'Eastern Zone of Africa: C9, ET, E3, J2, T5, 5H, 5X, 5Z, 7O and 7Q.',
+    38: 'South African Zone: A2, V5, ZD9, Z2, ZS1-ZS8, 3DA, 3Y (Bouvet Is.), 7P, and some Antarctic stations.',
+    39: 'Madagascar Zone: D6, FT-W, FT-X, FT-Z, FH, FR, S7, VK0 (Heard Is.) VQ9, 3B6/7, 3B8, 3B9, 5R8 and some Antarctic stations.',
+    40: 'North Atlantic Zone: JW, JX, OX, R1FJ (Franz Josef Land), and TF.'
 }
 
 def get_aws_credentials():
@@ -141,6 +175,55 @@ def delete_old(df, time_hours):
     df = df[df['timestamp'] >= day_ago].reset_index(drop=True)
     return df
 
+def slope_to_unicode(slope):
+    """
+    Converts a slope value to a corresponding Unicode character based on the specified ranges.
+
+    :param slope: The slope value (float) to convert.
+    :return: A Unicode character representing the direction of the slope.
+    """
+    if -0.1 <= slope <= 0.1:
+        return '\u21D4'  # ⇔
+    elif 0.1 < slope <= 0.3:
+        return '\u21D7'  # ⇗
+    elif slope > 0.3:
+        return '\u21D1'  # ⇑
+    elif -0.3 <= slope < -0.1:
+        return '\u21D8'  # ⇘
+    elif slope < -0.3:
+        return '\u21D3'  # ⇓
+    else:
+        return ''  # In case of NaN or other unexpected values
+
+def compute_slope(df, zone, band):
+    """
+    Computes the slope of SNR over time for a given zone and band.
+
+    :param df: The dataframe containing SNR data.
+    :param zone: The zone to filter on.
+    :param band: The band to filter on.
+    :return: The slope of SNR over time.
+    """
+    # Filter DataFrame for the given zone and band
+    relevant_spots = df[(df['zone'] == zone) & (df['band'] == band)]
+
+    if len(relevant_spots) < 2:
+        return np.nan  # Not enough data points to compute a slope
+
+    # Convert timestamps to numerical values (e.g., Unix timestamp)
+    time_values = relevant_spots['timestamp'].astype('int64') // 1e9  # Convert to seconds
+    snr_values = relevant_spots['snr']
+
+    # Check if all time_values are identical
+    if time_values.nunique() == 1:
+        # All timestamps are identical; cannot compute slope
+        return 0  # or np.nan, depending on how you want to handle it
+
+    # Perform linear regression
+    slope, intercept, r_value, p_value, std_err = linregress(time_values, snr_values)
+
+    return slope
+    
 def combine_snr_count(snr, count, band, zone, df, row_index):
     if pd.isna(snr) and count == 0:
         return "", None
@@ -148,6 +231,32 @@ def combine_snr_count(snr, count, band, zone, df, row_index):
         display_text = f'N/A ({count})'
     else:
         display_text = f'{int(round(snr))} ({count})'
+
+    # Compute the slope for this zone and band
+    slope = compute_slope(df, zone, band)
+    # Convert the slope to a Unicode arrow
+    slope_arrow = slope_to_unicode(slope)
+
+    # Determine the arrow color based on the same thresholds as in slope_to_unicode
+    if pd.isna(slope) or (-0.1 <= slope <= 0.1):
+        arrow_color = 'black'  # Stable or undefined slope
+    elif 0.1 < slope <= 0.3:
+        arrow_color = 'green'  # Slight positive slope
+    elif slope > 0.3:
+        arrow_color = 'green'  # Strong positive slope
+    elif -0.3 <= slope < -0.1:
+        arrow_color = 'red'    # Slight negative slope
+    elif slope < -0.3:
+        arrow_color = 'red'    # Strong negative slope
+    else:
+        arrow_color = 'black'  # Default color
+
+
+    # Style the arrow: increase font size and apply color
+    styled_arrow = f'<span style="font-size: 16pt; color: {arrow_color};">{slope_arrow}</span>'
+
+    # Append the styled arrow to the display text
+    display_text_with_arrow = f'{display_text} {styled_arrow}'
 
     # Filter DataFrame for the given zone and band
     relevant_spots = df[(df['zone'] == zone) & (df['band'] == band)]
@@ -174,12 +283,12 @@ def combine_snr_count(snr, count, band, zone, df, row_index):
 
     # HTML with data-tooltip-content attribute
     cell_html = f'''
-        <span class="tooltip" data-tooltip-content="#{tooltip_id}">{display_text}</span>
+        <span class="tooltip" data-tooltip-content="#{tooltip_id}">{display_text_with_arrow}</span>
     '''
 
     # Return the cell HTML and the tooltip content
     return cell_html, (tooltip_id, tooltip_content_html)
-
+    
 def create_custom_colormap():
     # Define the colors and positions according to the percentage mapping
     colors = [
@@ -384,7 +493,7 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
     html1 = styled_table1.hide(axis="index").to_html()
 
     html1 = html1.replace('<table ',
-                          '<table style="width: 95vw; table-layout: fixed; margin-left: auto; margin-right: auto;" ')
+                          '<table style="width: 60vw; table-layout: fixed; margin-left: auto; margin-right: auto;" ')
 
     if debug:
         print("Generated HTML Table:")
@@ -566,7 +675,7 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
                 
                 <div style="display: flex; align-items: center; margin-right: 15px;">
                     <div style="width: 20px; height: 20px; background-color: #a3cce9; margin-right: 5px;"></div>
-                    <span style="font-size: 12pt;">Very Weak (??? -15 dB)</span>
+                    <span style="font-size: 12pt;">Very Weak (≤ -15 dB)</span>
                 </div>
                 
                 <div style="display: flex; align-items: center; margin-right: 15px;">
@@ -581,7 +690,36 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
                 
                 <div style="display: flex; align-items: center;">
                     <div style="width: 20px; height: 20px; background-color: #e57373; margin-right: 5px;"></div>
-                    <span style="font-size: 12pt;">Strong (??? -3 dB)</span>
+                    <span style="font-size: 12pt;">Strong (≥ -3 dB)</span>
+                </div>
+            </div>
+            <!-- Slope Symbols Section -->
+            <div style="display: flex; align-items: center; margin-bottom: 10px;">
+                <div style="font-size: 14pt; margin-right: 20px;">SNR Trend:</div>
+                
+                <div style="display: flex; align-items: center; margin-right: 15px;">
+                    <span style="font-size: 16pt;">⇑</span>
+                    <span style="font-size: 12pt; margin-left: 5px;">Strong Increase</span>
+                </div>
+                
+                <div style="display: flex; align-items: center; margin-right: 15px;">
+                    <span style="font-size: 16pt;">⇗</span>
+                    <span style="font-size: 12pt; margin-left: 5px;">Slight Increase</span>
+                </div>
+                
+                <div style="display: flex; align-items: center; margin-right: 15px;">
+                    <span style="font-size: 16pt;">⇔</span>
+                    <span style="font-size: 12pt; margin-left: 5px;">Stable</span>
+                </div>
+                
+                <div style="display: flex; align-items: center; margin-right: 15px;">
+                    <span style="font-size: 16pt;">⇘</span>
+                    <span style="font-size: 12pt; margin-left: 5px;">Slight Decrease</span>
+                </div>
+                
+                <div style="display: flex; align-items: center;">
+                    <span style="font-size: 16pt;">⇓</span>
+                    <span style="font-size: 12pt; margin-left: 5px;">Strong Decrease</span>
                 </div>
             </div>
         </div>
@@ -595,6 +733,7 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
     final_html = f"""
     <html>
     <head>
+        <meta charset="UTF-8">
         <meta http-equiv="refresh" content="{int(frequency * 60)}">
         <style>
             body {{
@@ -643,8 +782,8 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
                         return template.innerHTML;
                     }},
                     allowHTML: true,
-                    interactive: true,
                     maxWidth: 'none',
+                    interactive: true,
                     animation: 'scale',
                     placement: 'top',
                     theme: 'light',
@@ -693,3 +832,4 @@ if __name__ == '__main__':
     while True:
         run(aws_access_key, secret_access_key, s3_bucket, include_solar_data)
         time.sleep(time_to_wait)
+        
