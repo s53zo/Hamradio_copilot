@@ -8,16 +8,18 @@ See live demo for ITU zone 28: https://azure.s53m.com/matrigs-desktop/copilot/
 
 This repository contains two Python scripts for working with DX Cluster data:
 
-  * **connect.py** - Connects to a DX Cluster server, collects spotted callsigns, and stores them in an SQLite database.
+  * **connect.py** - Connects to a DX Cluster server or PSK Reporter feed, collects spotted callsigns, and stores them in an SQLite database.
   * **analyseSNR.py** - Analyzes SNR data from the SQLite database and generates an HTML report.
 
 ### connect.py
 
-This script connects to a DX Cluster server, retrieves spotted callsign information, and stores it in a local SQLite database (`callsigns.db`). It filters the data based on the specified ITU Zone and enriches it with additional information like band and CQZone.
+This script connects to a DX Cluster server via telnet, retrieves spotted callsign information, and stores it in a local SQLite database (`callsigns.db`). It filters the data based on the specified ITU Zone and enriches it with additional information like band and CQZone.
+
+Added option is to connect t PSK Reporter feed via MQTT. See http://mqtt.pskreporter.info.
 
 **Features:**
 
-* Connects to the DX Cluster server and handles login.
+* Connects to the data feed.
 * Parses received data to extract callsign, frequency, mode, SNR, and spotter information using a regular expression.
 * Uses a cache to avoid redundant lookups for callsign details (CQZone and ITU Zone).
 * Calculates the band category based on the frequency.
@@ -27,14 +29,23 @@ This script connects to a DX Cluster server, retrieves spotted callsign informat
 **Running the script:**
 
 ```
-python connect.py -l <your_callsign> -i <itu_zone> [--address <dx_cluster_host>] [--port <dx_cluster_port>] [-d]
+python connect.py *see options below*
 ```
 
+For telnet:
+* `-c telnet`: Use telnet type conection
 * `-l <your_callsign>`: Specify your callsign for login.
 * `-i <itu_zone>`: Specify the ITU Zone to track (integer value).
 * `--address <dx_cluster_host>` (optional): Override the default DX Cluster host (telnet.reversebeacon.net).
 * `--port <dx_cluster_port>` (optional): Override the default DX Cluster port (7001).
 * `-d` (optional): Enable debug output.
+
+For MQTT:
+* `-c mqtt`: Use mqtt type conection
+* `-r country_code`: Specify the receiver country codes (ADIF codes) to track, comma-separated. e.g. -r 499,497,503,504,206,239
+* `-d` (optional): Enable debug output.
+
+Country code list available at https://www.adif.org/304/ADIF_304.htm#Country_Codes
 
 **Dependencies:**
 
@@ -43,6 +54,7 @@ python connect.py -l <your_callsign> -i <itu_zone> [--address <dx_cluster_host>]
 * `re` library
 * `logging` library
 * `argparse` library (optional, for command-line arguments)
+* `paho-mqtt` library
 
 **Note:**
 
