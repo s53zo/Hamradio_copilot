@@ -45,6 +45,7 @@ use_s3 = args.use_s3
 debug = args.debug
 include_solar_data = args.include_solar_data  # Get the include_solar_data flag
 
+#Comment out which bands you want to have
 #band_order = ['160', '80', '40', '30', '20', '17', '15', '12', '10', '6']
 band_order = ['160', '80', '40', '20', '15', '10']
 
