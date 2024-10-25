@@ -29,9 +29,8 @@ Added option is to connect t PSK Reporter feed via MQTT. See http://mqtt.pskrepo
 **Running the script:**
 
 ```
-python connect.py *see options below*
+python connect.py -c telnet -l <your_callsign> -i <itu_zone> --address <dx_cluster_host> --port <dx_cluster_port> -d
 ```
-
 For telnet:
 * `-c telnet`: Use telnet type conection
 * `-l <your_callsign>`: Specify your callsign for login.
@@ -39,6 +38,10 @@ For telnet:
 * `--address <dx_cluster_host>` (optional): Override the default DX Cluster host (telnet.reversebeacon.net).
 * `--port <dx_cluster_port>` (optional): Override the default DX Cluster port (7001).
 * `-d` (optional): Enable debug output.
+
+```
+python connect.py -c mqtt -r <comma-separated cty codes> -d
+```
 
 For MQTT:
 * `-c mqtt`: Use mqtt type conection
