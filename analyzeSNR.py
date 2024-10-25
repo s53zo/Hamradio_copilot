@@ -228,9 +228,9 @@ def combine_snr_count(snr, count, band, zone, df, row_index):
     if pd.isna(snr) and count == 0:
         return "", None
     elif pd.isna(snr):
-        display_text = f'N/A ({count})'
+        display_text = f'N/A ({int(count)})'
     else:
-        display_text = f'{int(round(snr))} ({count})'
+        display_text = f'{int(round(snr))} ({int(count)})'
 
     # Compute the slope for this zone and band
     slope = compute_slope(df, zone, band)
@@ -362,15 +362,28 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
     df['band'] = df['band'].astype('category')
     df['band'] = df['band'].cat.set_categories(band_order)
 
-    # Generate the pivot tables for the aggregated data
-    count_table = df.pivot_table(
-        values='snr',
+#    # Generate the pivot tables for the aggregated data
+#    count_table = df.pivot_table(
+#        values=('spotter', 'spotted_station'),
+#        values='snr',
+#        index='zone',
+#        columns='band',
+#        aggfunc=lambda x: len(set(zip(df.loc[x.index, 'spotter'], df.loc[x.index, 'spotted_station']))),
+#        aggfunc='count',
+#        fill_value=0,
+#        dropna=False
+#    )
+
+#Unique spot spotter combination
+    count_table = df.groupby(['zone', 'band']).agg(
+        count=('spotter', lambda x: len(set(zip(x, df.loc[x.index, 'spotted_station']))))
+    ).reset_index().pivot(
         index='zone',
         columns='band',
-        aggfunc='count',
-        fill_value=0,
-        dropna=False
-    )
+        values='count'
+    ).fillna(0)
+
+
     mean_table = df.pivot_table(
         values='snr',
         index='zone',
@@ -390,7 +403,7 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
         print(mean_table.head())
 
     now = dt.datetime.now(dt.timezone.utc).strftime("%b %d, %Y %H:%M")
-    caption_string = f"Last {int(span*60)} minutes spots in ITU Zone 28 overview - refresh at {now} GMT"
+    caption_string = f"Last {int(span*60)} minutes SNR of spots in S5 and around - refresh at {now} GMT"
 
     # Compute snr_min and snr_max using 10th and 90th percentiles
     if not df['snr'].empty:
@@ -721,9 +734,9 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
                     <span style="font-size: 16pt;">⇓</span>
                     <span style="font-size: 12pt; margin-left: 5px;">Strong Decrease</span>
                 </div>
-            </div>
+           </div>
         </div>
-    </div>
+    <small><center>Make your own SNR overview: <a href="https://github.com/s53zo/Hamradio_copilot">https://github.com/s53zo/Hamradio_copilot</a></center></small></div>
     """
 
     # Adjust the left padding depending on whether solar data is included
@@ -831,5 +844,5 @@ if __name__ == '__main__':
 
     while True:
         run(aws_access_key, secret_access_key, s3_bucket, include_solar_data)
-        time.sleep(time_to_wait)
+        time.sleep(time_to_wait)root
         
