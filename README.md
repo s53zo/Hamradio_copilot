@@ -63,7 +63,7 @@ Country code list available at https://www.adif.org/304/ADIF_304.htm#Country_Cod
 
 * The script expects a file named `cty.plist` to be present in the same directory. This file contains callsign information including ITU Zone data.
 
-cty.plist available at: https://github.com/dh1tw/DX-Cluster-Parser/blob/master/cty.plist
+Latest cty.plist available at: https://www.country-files.com (.plist is in XML format)
 
 ### analyseSNR.py
 
