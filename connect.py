@@ -11,9 +11,11 @@ import os
 import select
 import time
 import logging
+import paho.mqtt.client as mqtt
+import json
 
-# Updated regular expression pattern to capture spotted_station
-compiled_pattern = re.compile(
+# Regular expression pattern for telnet data
+telnet_pattern = re.compile(
     r'DX de (\S+):\s+(\d+\.\d+)\s+(\S+)\s+(FT8|FT4|CW)\s+([+-]?\d+)\s*dB'
 )
 
@@ -69,7 +71,7 @@ def delete_old_entries(cursor):
 
 def search_list(call_sign, cty_list):
     """
-    Search through the cty.plist file to find CQZone and ITUZone information for the provided callsign.
+    Search through the cty.plist file to find CQZone and CountryCode information for the provided callsign.
     Uses a cache to avoid redundant lookups.
     """
     original_call_sign = call_sign  # Keep the original callsign for reference
@@ -79,7 +81,7 @@ def search_list(call_sign, cty_list):
     if original_call_sign in callsign_cache:
         logging.debug(f"Found '{original_call_sign}' in cache.")
         return callsign_cache[original_call_sign]
-    
+
     # If not in cache, perform the lookup
     while len(call_sign) >= 1 and call_sign not in cty_list:
         logging.debug(f"Callsign '{call_sign}' not found. Truncating last character.")
@@ -91,18 +93,26 @@ def search_list(call_sign, cty_list):
     else:
         info = cty_list[call_sign]
         cq_zone = info.get("CQZone")
-        itu_zone = info.get("ITUZone")
-        logging.debug(f"Found CQZone '{cq_zone}' and ITUZone '{itu_zone}' for callsign '{call_sign}'.")
+        country_code = info.get("ADIF")
+        logging.debug(f"Found CQZone '{cq_zone}' and CountryCode '{country_code}' for callsign '{call_sign}'.")
         # Cache the result
-        callsign_cache[original_call_sign] = {"CQZone": cq_zone, "ITUZone": itu_zone}
+        callsign_cache[original_call_sign] = {"CQZone": cq_zone, "CountryCode": country_code}
         return callsign_cache[original_call_sign]
 
-def calculate_band(freq):
+def calculate_band(freq, is_telnet=True):
     """
     Calculate the radio band category based on the frequency.
+    For telnet data, the frequency is in kHz.
+    For MQTT data, the frequency is in Hz.
     """
-    logging.debug(f"Calculating band for frequency '{freq}'.")
-    freq_khz = float(freq)  # The frequency is in kHz
+    logging.debug(f"Calculating band for frequency '{freq}' with is_telnet={is_telnet}.")
+
+    if is_telnet:
+        freq_khz = float(freq)  # Frequency is in kHz
+    else:
+        freq_hz = float(freq)
+        freq_khz = freq_hz / 1000.0  # Convert Hz to kHz
+
     if 1800 <= freq_khz <= 2000:
         return 160
     elif 3500 <= freq_khz <= 4000:
@@ -185,24 +195,13 @@ def reconnect(host, port, login_callsign, max_retries=10):
 
     return None  # In case the loop exits without success
 
-def load_itu_zone_prefixes(cty_list, itu_zone):
+def run(connection_type, receiver_countries, mqtt_host, mqtt_port, host, port, login_callsign):
     """
-    Extracts all prefixes associated with the specified ITU Zone from the cty_list.
-    Returns a set of prefixes.
-    """
-    itu_zone_prefixes = set()
-    for prefix, info in cty_list.items():
-        if info.get("ITUZone") == itu_zone:
-            itu_zone_prefixes.add(prefix)
-    return itu_zone_prefixes
-
-def run(host, port, login_callsign, itu_zone):
-    """
-    Main function to connect to the DX Cluster, receive and process data, and store it in the SQLite database.
-    Handles connection timeouts, data processing, and reconnection attempts.
+    Main function to connect to the DX Cluster or MQTT broker, receive and process data, and store it in the SQLite database.
+    Handles data processing and resource cleanup.
     """
     last_update_time = datetime.now().timestamp()
-    logging.debug(f"Starting main run function with host={host}, port={port}, login_callsign={login_callsign}, itu_zone={itu_zone}")
+    logging.debug(f"Starting main run function with connection_type={connection_type}, receiver_countries={receiver_countries}")
 
     # Load the cty.plist file with callsign information
     try:
@@ -214,94 +213,204 @@ def run(host, port, login_callsign, itu_zone):
         print(f"Error: cty.plist not found.")
         return
 
-    # Load the ITU Zone prefixes
-    itu_zone_prefixes = load_itu_zone_prefixes(cty_list, itu_zone)
-    logging.debug(f"Loaded {len(itu_zone_prefixes)} ITU Zone {itu_zone} prefixes.")
-
-    # Establish the initial socket connection
-    s = reconnect(host, port, login_callsign)
-
     # Set up the SQLite database
     conn, cursor = setup_database()
 
-    buffer = ""  # Buffer to store incoming data
     buffer_entry_count = 0  # Track how many valid entries are processed between updates
     buffer_list = []  # List to hold data entries before inserting into the database
 
-    try:
-        while True:
-            now = datetime.now()  # Cache the current time
-            ready_to_read, _, _ = select.select([s], [], [], 1)  # Wait up to 1 second for data
+    if connection_type == 'telnet':
+        # Establish the initial socket connection
+        s = reconnect(host, port, login_callsign)
 
-            if ready_to_read:
-                try:
-                    data = s.recv(1024).decode('utf-8', errors='ignore')  # Non-blocking read, only if data is available
-                    logging.debug(f"Received data: {data}")
+        buffer = ""  # Buffer to store incoming data
 
-                    if not data:
-                        logging.debug("Connection closed by server.")
-                        print("Connection closed by server.")
-                        s = reconnect(host, port, login_callsign)  # Reconnect if the connection is closed
+        try:
+            while True:
+                now = datetime.now()  # Cache the current time
+                ready_to_read, _, _ = select.select([s], [], [], 1)  # Wait up to 1 second for data
+
+                if ready_to_read:
+                    try:
+                        data = s.recv(1024).decode('utf-8', errors='ignore')  # Non-blocking read, only if data is available
+                        logging.debug(f"Received data: {data}")
+
+                        if not data:
+                            logging.debug("Connection closed by server.")
+                            print("Connection closed by server.")
+                            s = reconnect(host, port, login_callsign)  # Reconnect if the connection is closed
+                            continue
+
+                        buffer += data  # Append the received data to the buffer
+
+                    except UnicodeDecodeError as e:
+                        logging.error(f"Decoding error: {e}")
+                        print(f"Decoding error: {e}")
+                        continue
+                    except socket.error as e:
+                        logging.error(f"Socket error: {e}. Reconnecting...")
+                        print(f"Socket error: {e}. Reconnecting...")
+                        s = reconnect(host, port, login_callsign)
                         continue
 
-                    buffer += data  # Append the received data to the buffer
+                    # Split the buffer by newlines; the last part may be incomplete
+                    lines = buffer.split('\n')
+                    buffer = lines[-1]  # Save the incomplete line back to the buffer
+                    logging.debug(f"Processing {len(lines)-1} complete lines from buffer.")
 
-                except UnicodeDecodeError as e:
-                    logging.error(f"Decoding error: {e}")
-                    print(f"Decoding error: {e}")
-                    continue
-                except socket.error as e:
-                    logging.error(f"Socket error: {e}. Reconnecting...")
-                    print(f"Socket error: {e}. Reconnecting...")
-                    s = reconnect(host, port, login_callsign)
-                    continue
+                    for line in lines[:-1]:  # Process all complete lines
+                        line = line.strip()
+                        logging.debug(f"Processing line: {line}")
 
-                # Split the buffer by newlines; the last part may be incomplete
-                lines = buffer.split('\n')
-                buffer = lines[-1]  # Save the incomplete line back to the buffer
-                logging.debug(f"Processing {len(lines)-1} complete lines from buffer.")
+                        match = telnet_pattern.search(line)  # Use the telnet regex
 
-                for line in lines[:-1]:  # Process all complete lines
-                    line = line.strip()
-                    logging.debug(f"Processing line: {line}")
+                        if match:
+                            # Mapping receiver call to spotter and sender call to spotted station
+                            spotter_callsign = match.group(1).rstrip('-#')  # Spotter (receiver call)
+                            frequency = match.group(2)
+                            call_sign = match.group(3)  # Spotted station (sender call)
+                            mode = match.group(4)
+                            snr = match.group(5).replace(" ", "")
+                            timestamp = now.timestamp()
 
-                    match = compiled_pattern.search(line)  # Use the updated regex
+                            logging.debug(f"Matched data - Spotter: {spotter_callsign}, Frequency: {frequency}, Spotted Station: {call_sign}, Mode: {mode}, SNR: {snr}")
 
-                    if match:
-                        spotter_callsign = match.group(1).rstrip('-#')
-                        frequency = match.group(2)
-                        call_sign = match.group(3)
-                        mode = match.group(4)
-                        snr = match.group(5).replace(" ", "")
-                        logging.debug(f"Matched data - Spotter: {spotter_callsign}, Frequency: {frequency}, Call Sign: {call_sign}, Mode: {mode}, SNR: {snr}")
+                            # Check if the spotter's country code matches any of the specified receiver countries
+                            spotter_result = search_list(spotter_callsign, cty_list)
+                            if spotter_result and str(spotter_result["CountryCode"]) in receiver_countries:
+                                # Proceed to process the spot
+                                # Get the CQZone of the spotted callsign
+                                spotted_result = search_list(call_sign, cty_list)
+                                if spotted_result:
+                                    cq_zone = spotted_result["CQZone"]
+                                    spotted_station = call_sign  # The spotted station is the call_sign
+                                else:
+                                    cq_zone = None
+                                    spotted_station = "Unknown"
 
-                        # Check if the spotter is in the specified ITU Zone
-                        spotter_result = search_list(spotter_callsign, cty_list)
-                        if spotter_result and spotter_result["ITUZone"] == itu_zone:
-                            # Proceed to process the spot
-                            # Get the CQZone and ITUZone of the spotted callsign
-                            spotted_result = search_list(call_sign, cty_list)
-                            if spotted_result:
-                                cq_zone = spotted_result["CQZone"]
-                                spotted_station = call_sign  # The spotted station is the call_sign
+                                band = calculate_band(frequency, is_telnet=True)
+                                if band and cq_zone and snr:
+                                    # Add the enhanced callsign info to the buffer list
+                                    buffer_list.append((cq_zone, band, snr, timestamp, spotter_callsign, spotted_station))
+                                    logging.debug(f"Added entry to buffer list: {(cq_zone, band, snr, timestamp, spotter_callsign, spotted_station)}")
+                                    buffer_entry_count += 1  # Increment the count of valid entries processed
+                                else:
+                                    logging.debug("Invalid data encountered. Skipping entry.")
                             else:
-                                cq_zone = None
-                                spotted_station = "Unknown"
-
-                            band = calculate_band(float(frequency))
-                            if band and cq_zone and snr:
-                                # Add the enhanced callsign info to the buffer list
-                                buffer_list.append((cq_zone, band, snr, now.timestamp(), spotter_callsign, spotted_station))
-                                logging.debug(f"Added entry to buffer list: {(cq_zone, band, snr, now.timestamp(), spotter_callsign, spotted_station)}")
-                                buffer_entry_count += 1  # Increment the count of valid entries processed
-                            else:
-                                logging.debug("Invalid data encountered. Skipping entry.")
+                                logging.debug(f"Spotter '{spotter_callsign}' country code does not match receiver countries '{receiver_countries}'. Skipping entry.")
                         else:
-                            logging.debug(f"Spotter '{spotter_callsign}' is not in ITU Zone {itu_zone}. Skipping entry.")
-                    else:
-                        logging.debug("No regex match found for line. Skipping entry.")
+                            logging.debug("No regex match found for line. Skipping entry.")
+
+                # Every 500 lines or 30 seconds, update the database with the new info
+                if ((buffer_entry_count >= 500) or (now.timestamp() - last_update_time > 30)) and buffer_list:
+                    logging.debug(f"Updating database with {len(buffer_list)} entries.")
+                    insert_batch(cursor, buffer_list)
+                    delete_old_entries(cursor)  # Keep the database size manageable
+                    conn.commit()  # Commit the changes
+
+                    last_update_time = now.timestamp()
+
+                    # Get the current time and print it along with the update message
+                    current_time = now.strftime("%Y-%m-%d %H:%M:%S")
+                    print(f"Database updated on {current_time}. Processed {buffer_entry_count} total entries from the buffer.")
+
+                    # Reset buffer entry count and list after each update
+                    buffer_entry_count = 0
+                    buffer_list = []
+        except KeyboardInterrupt:
+            # Handle clean exit on Ctrl+C
+            logging.info("KeyboardInterrupt received. Exiting gracefully...")
+            print("Exiting... Please wait while resources are being cleaned up.")
+        finally:
+            # Clean up resources
+            try:
+                if s:
+                    s.close()
+                    logging.debug("Socket connection closed.")
+            except Exception as e:
+                logging.error(f"Error closing socket: {e}")
+
+            try:
+                if conn:
+                    conn.commit()
+                    conn.close()
+                    logging.debug("Database connection closed.")
+            except Exception as e:
+                logging.error(f"Error closing database connection: {e}")
+
+            logging.info("Cleanup complete. Goodbye!")
+    elif connection_type == 'mqtt':
+        # MQTT Connection and processing
+        logging.debug(f"Connecting to MQTT broker at {mqtt_host}:{mqtt_port} and subscribing to relevant topics.")
+
+        client = mqtt.Client()
+
+        def on_connect(client, userdata, flags, rc):
+            if rc == 0:
+                logging.debug("Connected to MQTT broker successfully.")
+                print("Connected to MQTT broker successfully.")
+                # Subscribe to topics for the specified receiver countries
+                for country_code in receiver_countries:
+                    topic = f"pskr/filter/v2/+/+/+/+/+/+/+/{country_code}"
+                    logging.debug(f"Subscribing to topic '{topic}'")
+                    client.subscribe(topic)
+            else:
+                logging.error(f"Failed to connect to MQTT broker. Return code {rc}")
+
+        def on_message(client, userdata, msg):
+            nonlocal buffer_entry_count, buffer_list, last_update_time
+            data = msg.payload.decode('utf-8')
+            logging.debug(f"Received MQTT message on topic '{msg.topic}': {data}")
+
+            # Parse the JSON payload
+            try:
+                spot = json.loads(data)
+                logging.debug(f"Parsed JSON data: {spot}")
+            except json.JSONDecodeError as e:
+                logging.error(f"JSON decoding error: {e}")
+                return
+
+            # Extract relevant fields
+            spotter_callsign = spot.get('rc')  # Receiver call is the spotter
+            frequency = spot.get('f')
+            call_sign = spot.get('sc')  # Sender call is the spotted station
+            mode = spot.get('md')
+            snr = spot.get('rp')
+            timestamp = spot.get('t')
+            receiver_country_code = spot.get('ra')  # Receiver country code
+
+            if str(receiver_country_code) not in receiver_countries:
+                logging.debug(f"Receiver country code '{receiver_country_code}' does not match the specified countries '{receiver_countries}'. Skipping entry.")
+                return
+
+            logging.debug(f"Processing spot: Spotter={spotter_callsign}, Frequency={frequency}, Spotted Station={call_sign}, Mode={mode}, SNR={snr}")
+
+            # Check if the spotter exists in cty_list
+            spotter_result = search_list(spotter_callsign, cty_list)
+            if spotter_result:
+                # Proceed to process the spot
+                # Get the CQZone of the spotted callsign
+                spotted_result = search_list(call_sign, cty_list)
+                if spotted_result:
+                    cq_zone = spotted_result["CQZone"]
+                    spotted_station = call_sign  # The spotted station is the call_sign
+                else:
+                    cq_zone = None
+                    spotted_station = "Unknown"
+
+                band = calculate_band(frequency, is_telnet=False)
+                if band and cq_zone and snr is not None:
+                    # Add the enhanced callsign info to the buffer list
+                    buffer_list.append((cq_zone, band, snr, timestamp, spotter_callsign, spotted_station))
+                    logging.debug(f"Added entry to buffer list: {(cq_zone, band, snr, timestamp, spotter_callsign, spotted_station)}")
+                    buffer_entry_count += 1  # Increment the count of valid entries processed
+                else:
+                    logging.debug("Invalid data encountered. Skipping entry.")
+            else:
+                logging.debug(f"Spotter '{spotter_callsign}' not found in cty_list. Skipping entry.")
 
             # Every 500 lines or 30 seconds, update the database with the new info
+            now = datetime.now()
             if ((buffer_entry_count >= 500) or (now.timestamp() - last_update_time > 30)) and buffer_list:
                 logging.debug(f"Updating database with {len(buffer_list)} entries.")
                 insert_batch(cursor, buffer_list)
@@ -317,37 +426,59 @@ def run(host, port, login_callsign, itu_zone):
                 # Reset buffer entry count and list after each update
                 buffer_entry_count = 0
                 buffer_list = []
-    except KeyboardInterrupt:
-        # Handle clean exit on Ctrl+C
-        logging.info("KeyboardInterrupt received. Exiting gracefully...")
-        print("Exiting... Please wait while resources are being cleaned up.")
-    finally:
-        # Clean up resources
-        try:
-            if s:
-                s.close()
-                logging.debug("Socket connection closed.")
-        except Exception as e:
-            logging.error(f"Error closing socket: {e}")
+
+        client.on_connect = on_connect
+        client.on_message = on_message
 
         try:
-            if conn:
-                conn.commit()
-                conn.close()
-                logging.debug("Database connection closed.")
+            client.connect(mqtt_host, mqtt_port, 60)
         except Exception as e:
-            logging.error(f"Error closing database connection: {e}")
+            logging.error(f"Failed to connect to MQTT broker: {e}")
+            print(f"Failed to connect to MQTT broker: {e}")
+            return
 
-        logging.info("Cleanup complete. Goodbye!")
+        # Start the loop
+        try:
+            client.loop_forever()
+        except KeyboardInterrupt:
+            logging.info("KeyboardInterrupt received. Exiting gracefully...")
+            print("Exiting... Please wait while resources are being cleaned up.")
+        finally:
+            # Clean up resources
+            try:
+                client.disconnect()
+                logging.debug("Disconnected from MQTT broker.")
+            except Exception as e:
+                logging.error(f"Error disconnecting MQTT client: {e}")
+
+            try:
+                if conn:
+                    conn.commit()
+                    conn.close()
+                    logging.debug("Database connection closed.")
+            except Exception as e:
+                logging.error(f"Error closing database connection: {e}")
+
+            logging.info("Cleanup complete. Goodbye!")
+    else:
+        logging.error(f"Unknown connection type '{connection_type}'.")
+        print(f"Unknown connection type '{connection_type}'.")
 
 if __name__ == '__main__':
     # Argument parser for command-line options
-    parser = argparse.ArgumentParser(description="Connect to a DX Cluster, collect spotted callsigns, and store them in an SQLite database.")
+    parser = argparse.ArgumentParser(description="Connect to a DX Cluster or MQTT broker, collect spotted callsigns, and store them in an SQLite database.")
+    parser.add_argument("-c", "--connection-type", choices=['telnet', 'mqtt'], default='telnet', help="Choose the connection type: telnet or mqtt")
+    parser.add_argument("-r", "--receiver-countries", help="Specify the receiver country codes (ADIF codes) to track, comma-separated", required=True)
+    parser.add_argument("-d", "--debug", help="Enable debug output", action='store_true')
+
+    # Telnet-specific arguments
     parser.add_argument("-a", "--address", help="Specify hostname/address of the DX Cluster", default=os.getenv("DX_CLUSTER_HOST", "telnet.reversebeacon.net"))
     parser.add_argument("-p", "--port", help="Specify port for the DX Cluster", type=int, default=int(os.getenv("DX_CLUSTER_PORT", 7001)))
-    parser.add_argument("-l", "--login-callsign", help="Specify the callsign to send during login", required=True)
-    parser.add_argument("-i", "--itu-zone", help="Specify the ITU Zone to track", type=int, required=True)
-    parser.add_argument("-d", "--debug", help="Enable debug output", action='store_true')
+    parser.add_argument("-l", "--login-callsign", help="Specify the callsign to send during login (for telnet)", default="")
+
+    # MQTT-specific arguments
+    parser.add_argument("--mqtt-host", help="Specify hostname/address of the MQTT broker", default="mqtt.pskreporter.info")
+    parser.add_argument("--mqtt-port", help="Specify port for the MQTT broker", type=int, default=1883)
 
     args = parser.parse_args()
 
@@ -357,6 +488,9 @@ if __name__ == '__main__':
     else:
         logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 
+    # Process receiver countries input
+    receiver_countries = [code.strip() for code in args.receiver_countries.split(',')]
+    logging.debug(f"Receiver countries to track: {receiver_countries}")
+
     # Run the main function with provided arguments
-    run(args.address, args.port, args.login_callsign, args.itu_zone)
-    
+    run(args.connection_type, receiver_countries, args.mqtt_host, args.mqtt_port, args.address, args.port, args.login_callsign)
