@@ -15,7 +15,7 @@ This repository contains two Python scripts for working with DX Cluster data:
 
 This script connects to a DX Cluster server via telnet, retrieves spotted callsign information, and stores it in a local SQLite database (`callsigns.db`). It filters the data based on the specified ITU Zone and enriches it with additional information like band and CQZone.
 
-Added option is to connect t PSK Reporter feed via MQTT. See http://mqtt.pskreporter.info.
+Added option is to connect to PSK Reporter feed via MQTT instead of telnet connectiomn to RBN. See http://mqtt.pskreporter.info.
 
 **Features:**
 
