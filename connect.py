@@ -343,7 +343,7 @@ def run(connection_type, receiver_countries, mqtt_host, mqtt_port, host, port, l
         # MQTT Connection and processing
         logging.debug(f"Connecting to MQTT broker at {mqtt_host}:{mqtt_port} and subscribing to relevant topics.")
 
-        client = mqtt.Client(client_id="9efh9v20rhv2083480hr")
+        client = mqtt.Client(client_id="9efh9v20rhv2031231223rnodffb917823983480hr")
         client.enable_logger()
 
 
