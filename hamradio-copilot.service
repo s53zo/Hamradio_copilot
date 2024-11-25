@@ -5,7 +5,7 @@ After=network.target
 [Service]
 User=user
 WorkingDirectory=/opt/hamradio-copilot
-ExecStart=/usr/bin/bash /opt/hamradio-copilot/start_copilot.sh
+ExecStart=ython3 /opt/hamradio-copilot/connect.py -c mqtt -r 499,497,503,504,206,239
 Restart=always
 
 [Install]
