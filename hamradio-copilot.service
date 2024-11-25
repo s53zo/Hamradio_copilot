@@ -1,0 +1,12 @@
+[Unit]
+Description=Hamradio Data Analysis Service
+After=network.target
+
+[Service]
+User=s53zo
+WorkingDirectory=/opt/hamradio-copilot
+ExecStart=/usr/bin/python3 /opt/hamradio-copilot/connect.py -c mqtt -r 499,497,503,504,206,239
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
