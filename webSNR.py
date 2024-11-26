@@ -489,7 +489,7 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
 
             .station-list {{
                 display: inline-grid;
-                grid-template-columns: repeat(auto-fit, minmax(70px, max-content));
+                grid-template-columns: repeat(4, minmax(70px, max-content));
                 gap: 2px;
                 padding: 4px;
                 background: #e4f0f3;
