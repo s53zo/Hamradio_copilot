@@ -363,6 +363,7 @@ def combine_snr_count(mean_table_row, count_table, band, df, row_index):
             
             tooltip_content_html = '<div class="station-list">'
             for station in unique_stations:
+                display_station = station.replace('.', '/') #to avoid KH0.AA3B and have KH0/AA3B
                 tooltip_content_html += f'<div>{html.escape(station)}</div>'
             tooltip_content_html += '</div>'
 
