@@ -462,8 +462,9 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
                 background-color: #333;
                 color: white;
                 font-size: 0.8rem;
-                max-width: 300px;
                 line-height: 1.3;
+                max-width: none !important;
+                width: auto !important;
             }}
 
             .tippy-box[data-theme~='zone'] .tippy-content {{
@@ -477,7 +478,8 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
             .tippy-content {{
                 padding: 0 !important;
                 font-size: 0.8rem;
-                max-width: none;
+                max-width: none !important;
+                width: auto !important;
                 background: white;
             }}
 
@@ -492,6 +494,8 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
                 padding: 4px;
                 background: #e4f0f3;
                 color: #333333;
+                width: fit-content;
+                max-width: 100%;
             }}
 
             .station-list div {{
