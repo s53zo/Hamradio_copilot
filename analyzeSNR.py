@@ -379,18 +379,46 @@ def generate_empty_cell_style(total_zones=40):
 def generate_html_template(table_html, tooltip_content_html, caption_string):
     style_block = f"""
     <style>
-        /* ... existing styles ... */
+        /* Base table styles */
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+        
+        /* Cell styling */
+        td, th {
+            padding: 8px;
+            text-align: center;
+            border: 1px solid #ddd;
+        }
         
         /* Empty cell styling */
-        {generate_empty_cell_style()}
+        td:empty, td:blank {
+            background-color: #ffffff !important;
+        }
         
-        /* Force all cells to be visible */
-        tr {{
+        /* Zone column styling */
+        td:first-child {
+            font-weight: bold;
+        }
+        
+        /* Ensure all cells are visible */
+        tr {
             display: table-row !important;
-        }}
-        td {{
+        }
+        
+        td {
             display: table-cell !important;
-        }}
+        }
+        
+        /* Header styling */
+        th {
+            background-color: rgba(255, 255, 255, 0.95);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            font-weight: bold;
+        }
     </style>
     """
   
