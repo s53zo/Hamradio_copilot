@@ -539,19 +539,10 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
     <body>
         {snr_table_html}
         {tooltip_content_html}
-        <div class="legend">
-            <div style="display: flex; justify-content: space-around; flex-wrap: wrap; margin-bottom: 10px;">
-                <div style="display: flex; align-items: center;">
-                    <span style="font-size: 14pt; margin-right: 20px;">SNR Trend:</span>
-                    <span style="font-size: 16pt; margin: 0 10px;">⇑</span><span>Strong Increase</span>
-                    <span style="font-size: 16pt; margin: 0 10px;">⇗</span><span>Slight Increase</span>
-                    <span style="font-size: 16pt; margin: 0 10px;">⇔</span><span>Stable</span>
-                    <span style="font-size: 16pt; margin: 0 10px;">⇘</span><span>Slight Decrease</span>
-                    <span style="font-size: 16pt; margin: 0 10px;">⇓</span><span>Strong Decrease</span>
-                </div>
-            </div>
+        <div style="text-align: center; margin-top: 20px;">
             <small>Make your own SNR overview: <a href="https://github.com/s53zo/Hamradio_copilot">https://github.com/s53zo/Hamradio_copilot</a></small>
         </div>
+
         <script src="https://unpkg.com/@popperjs/core@2/dist/umd/popper.min.js"></script>
         <script src="https://unpkg.com/tippy.js@6/dist/tippy-bundle.umd.min.js"></script>
         <script>
