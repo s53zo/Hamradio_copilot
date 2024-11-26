@@ -473,7 +473,7 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
     </body>
     </html>
     """
-    return template
+        return template
   
 def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False):
     # Connect to the SQLite database
