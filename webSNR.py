@@ -972,7 +972,7 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
                     <!-- Tooltip content is included here and will be hidden -->
                     {tooltip_content_html}
                 </div>
-#                <div>{legend_html}</div>
+                
             </div>
         </div>
         <!-- Include Tooltip.js JS -->
@@ -998,7 +998,8 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
     </body>
     </html>
     """
-
+    
+    # <div>{legend_html}</div>
     # Minify the final_html before writing it to the file
     minified_html = htmlmin.minify(final_html, remove_empty_space=True, remove_comments=True)
 
