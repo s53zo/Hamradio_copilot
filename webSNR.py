@@ -486,13 +486,11 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
             }}
 
             .station-list {{
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(70px, 1fr));
-                min-width: 600px;
-                max-width: 70%;
+                display: inline-grid;
+                grid-template-columns: repeat(auto-fit, minmax(70px, max-content));
                 gap: 2px;
                 padding: 4px;
-                background: #f0f0f0;
+                background: #e4f0f3;
                 color: #333333;
             }}
 
