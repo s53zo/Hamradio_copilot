@@ -141,16 +141,16 @@ def upload_file_to_s3(file_name, bucket_name, acc_key, sec_key):
 
 def reformat_table(table):
     """
-    Reformats the pivot table with proper handling of empty values and zone tooltips.
+    Reformats the pivot table with improved zone tooltips.
     """
     try:
         # Create a base DataFrame with all zones
         all_zones = pd.DataFrame({'zone': range(1, 41)})
         
         if table is None or table.empty:
-            # Create zone_display with tooltip attributes
+            # Create zone_display with improved tooltip structure
             all_zones['zone_display'] = all_zones['zone'].apply(
-                lambda x: f'<span class="zone-tooltip" title="{zone_name_map.get(int(x), "Unknown Zone")}">{str(int(x)).zfill(2)}</span>'
+                lambda x: f'<div class="zone-tooltip" style="display: inline-block; width: 100%; cursor: help;" title="{zone_name_map.get(int(x), "Unknown Zone")}">{str(int(x)).zfill(2)}</div>'
             )
             for band in band_order:
                 all_zones[band] = ''
@@ -162,9 +162,9 @@ def reformat_table(table):
         # Merge with all_zones to ensure all zones are present
         flattened = pd.merge(all_zones, flattened, on='zone', how='left')
         
-        # Create zone_display with tooltip attributes
+        # Create zone_display with improved tooltip structure
         flattened['zone_display'] = flattened['zone'].apply(
-            lambda x: f'<span class="zone-tooltip" title="{zone_name_map.get(int(x), "Unknown Zone")}">{str(int(x)).zfill(2)}</span>'
+            lambda x: f'<div class="zone-tooltip" style="display: inline-block; width: 100%; cursor: help;" title="{zone_name_map.get(int(x), "Unknown Zone")}">{str(int(x)).zfill(2)}</div>'
         )
         
         # Sort by zone and reset index
@@ -362,7 +362,7 @@ def generate_empty_cell_style(total_zones=40):
 
 def generate_html_template(snr_table_html, tooltip_content_html, caption_string):
     """
-    Generates a more compact HTML template with working tooltips.
+    Generates HTML template with improved tooltip styles.
     """
     template = f"""
     <!DOCTYPE html>
@@ -415,27 +415,38 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
             td:first-child {{
                 width: 35px;
                 font-weight: bold;
+                cursor: help;
+                padding: 0;
+            }}
+
+            .zone-tooltip {{
+                padding: 1px 2px;
+                background-color: rgba(0, 0, 0, 0.02);
+                transition: background-color 0.2s;
+            }}
+
+            .zone-tooltip:hover {{
+                background-color: rgba(0, 0, 0, 0.05);
             }}
     
             .tooltip {{
                 cursor: pointer;
             }}
 
-            .zone-tooltip {{
-                cursor: help;
-            }}
-    
             .tippy-box[data-theme~='zone'] {{
                 background-color: #333;
                 color: white;
                 font-size: 0.8rem;
-                max-width: 350px;
-                padding: 4px 8px;
-                line-height: 1.4;
+                max-width: 300px;
+                line-height: 1.3;
             }}
-            
+
             .tippy-box[data-theme~='zone'] .tippy-content {{
-                padding: 6px 10px;
+                padding: 8px 12px;
+            }}
+    
+            .tippy-box[data-theme~='zone'] .tippy-arrow {{
+                color: #333;
             }}
     
             .tippy-content {{
@@ -468,22 +479,6 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
                 font-size: 0.7rem;
                 color: #666;
             }}
-
-            .zone-tooltip {{
-                cursor: help;
-            }}
-
-            .tippy-box[data-theme~='zone'] {{
-                background-color: #333;
-                color: white;
-                font-size: 0.8rem;
-                max-width: 300px;
-                line-height: 1.3;
-            }}
-
-            .tippy-box[data-theme~='zone'] .tippy-content {{
-                padding: 8px 12px;
-            }}
         </style>
         <link rel="stylesheet" href="https://unpkg.com/tippy.js@6/animations/scale.css">
     </head>
@@ -514,7 +509,8 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
                     theme: 'zone',
                     placement: 'right',
                     animation: 'scale',
-                    delay: [100, 0],
+                    arrow: true,
+                    delay: [50, 0],
                 }});
             }});
         </script>
