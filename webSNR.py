@@ -579,11 +579,11 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
 
     # Combine mean_table and count_table into a single table with desired cell content
     combined_table = mean_table.copy()
-  
+    
     # Tooltip content list
     tooltip_contents = []
 
-    # Iterate over each band to combine mean and count using the helper function
+    # Iterate over each band
     for band in band_order:
         if band in mean_table.columns:
             combined_results = []
