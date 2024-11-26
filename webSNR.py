@@ -279,16 +279,16 @@ def snr_to_color(val, count):
         elif val >= -10:
             hue = 90   # yellow-green
         elif val >= -15:
-            hue = 30   # orange
+            hue = 200  # blue
         else:
-            hue = 0    # red
+            hue = 220  # dark blue
                 
         # Get intensity based on station count
         intensity = get_intensity(count)
             
         # Adjust lightness to avoid too dark colors
         sat = 0.8  # 80% saturation
-        min_lightness = 0.4  # Minimum lightness (40%)
+        min_lightness = 0.3  # Minimum lightness (30%)
         max_lightness = 0.7  # Maximum lightness (70%)
         lightness = min_lightness + intensity * (max_lightness - min_lightness)
             
@@ -299,6 +299,7 @@ def snr_to_color(val, count):
         return f'background-color: {hex_color}; padding: 1px 2px; font-size: 0.85rem;'
     except ValueError:
         return 'background-color: #ffffff; padding: 1px 2px;'
+
 
 def combine_snr_count(mean_table_row, count_table, band, df, row_index):
     """
