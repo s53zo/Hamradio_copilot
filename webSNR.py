@@ -282,17 +282,20 @@ def snr_to_color(val, count):
             hue = 200  # blue
         else:
             hue = 220  # dark blue
-            
+                
         # Get intensity based on station count
         intensity = get_intensity(count)
-        
-        # Convert HSL to RGB
+            
+        # Adjust lightness to avoid too dark colors
         sat = 0.8  # 80% saturation
-        lightness = intensity * 0.6  # Scale lightness to 0-60%
-        
+        min_lightness = 0.3  # Minimum lightness (30%)
+        max_lightness = 0.7  # Maximum lightness (70%)
+        lightness = min_lightness + intensity * (max_lightness - min_lightness)
+            
+        # Convert HSL to RGB
         rgb_color = hsl_to_rgb(hue/360, sat, lightness)
         hex_color = '#{:02x}{:02x}{:02x}'.format(*[int(x * 255) for x in rgb_color])
-        
+            
         return f'background-color: {hex_color}; padding: 1px 2px; font-size: 0.85rem;'
     except ValueError:
         return 'background-color: #ffffff; padding: 1px 2px;'
