@@ -141,48 +141,51 @@ def upload_file_to_s3(file_name, bucket_name, acc_key, sec_key):
 
 def reformat_table(table):
     """
-    Reformats the pivot table into a DataFrame convenient for HTML display.
-    Ensures all zones from 1 to 40 are included.
+    Reformats the pivot table with proper handling of empty values.
     """
     try:
+        # Create a base DataFrame with all zones
+        all_zones = pd.DataFrame({'zone': range(1, 41)})
+        
+        # If table is empty or None, return the base frame with empty cells
+        if table is None or table.empty:
+            all_zones['zone_display'] = all_zones['zone'].apply(
+                lambda x: f'<span title="{zone_name_map.get(int(x), "Unknown Zone")}">{str(int(x)).zfill(2)}</span>'
+            )
+            for band in band_order:
+                all_zones[band] = ''
+            return all_zones
+
         # Flatten the pivot table
         flattened = table.reset_index()
         
-        # Ensure 'zone' column exists
-        if 'zone' not in flattened.columns:
-            flattened['zone'] = flattened.index
-        
-        # Ensure 'zone' is numeric with error handling
-        flattened['zone'] = pd.to_numeric(flattened['zone'], errors='coerce')
-        
-        # Fill any missing zones
-        all_zones = pd.DataFrame({'zone': range(1, 41)})
+        # Merge with all_zones to ensure all zones are present
         flattened = pd.merge(all_zones, flattened, on='zone', how='left')
         
-        # Sort by 'zone'
-        flattened = flattened.sort_values(by='zone')
-        
-        # Create 'zone_display' with HTML formatting
+        # Create zone_display column
         flattened['zone_display'] = flattened['zone'].apply(
             lambda x: f'<span title="{zone_name_map.get(int(x), "Unknown Zone")}">{str(int(x)).zfill(2)}</span>'
-            if pd.notnull(x) else '')
+        )
         
-        # Reset index after sorting
-        flattened.reset_index(drop=True, inplace=True)
+        # Sort by zone and reset index
+        flattened = flattened.sort_values(by='zone').reset_index(drop=True)
         
-        # Rearrange columns
-        columns_order = ['zone', 'zone_display'] + [col for col in band_order if col in flattened.columns]
-        existing_columns = [col for col in columns_order if col in flattened.columns]
-        flattened = flattened[existing_columns]
+        # Ensure all band columns exist with empty strings for missing values
+        for band in band_order:
+            if band not in flattened.columns:
+                flattened[band] = ''
         
-        # Fill NaN with appropriate values
-        flattened = flattened.fillna(' ')
+        # Select and order columns
+        columns = ['zone', 'zone_display'] + band_order
+        flattened = flattened[columns]
+        
+        # Fill NaN values with empty strings
+        flattened = flattened.fillna('')
         
         return flattened
     except Exception as e:
         print(f"Error in reformat_table: {str(e)}")
-        # Return a minimal valid DataFrame in case of error
-        return pd.DataFrame({'zone': range(1, 41), 'zone_display': [f'{str(i).zfill(2)}' for i in range(1, 41)]})
+        return all_zones
       
 def delete_old(df, time_hours):
     """
@@ -249,65 +252,91 @@ def compute_slope(df, zone, band):
         
 def combine_snr_count(mean_table_row, count_table, band, df, row_index):
     """
-    Combines SNR and count data safely.
+    Combines SNR and count data with proper empty value handling.
     """
     try:
         zone = mean_table_row['zone']
-        # Convert SNR to float and handle NaN values
-        snr = pd.to_numeric(mean_table_row[band], errors='coerce') if band in mean_table_row else None
+        
+        # Handle SNR value - convert to float or None
+        snr = mean_table_row[band] if band in mean_table_row else None
+        if isinstance(snr, str) and snr.strip() == '':
+            snr = None
+        elif snr is not None:
+            try:
+                snr = float(snr)
+            except (ValueError, TypeError):
+                snr = None
+        
+        # Handle count value - convert to int or 0
         count = count_table.at[row_index, band] if band in count_table.columns else 0
+        if pd.isna(count) or (isinstance(count, str) and count.strip() == ''):
+            count = 0
+        else:
+            try:
+                count = int(count)
+            except (ValueError, TypeError):
+                count = 0
 
-        if pd.isna(snr) and count == 0:
+        # Generate display text
+        if snr is None and count == 0:
             return "", None
-        elif pd.isna(snr):
-            display_text = f'N/A ({int(count)})'
+        elif snr is None:
+            display_text = f'N/A ({count})'
         else:
-            display_text = f'{int(round(snr))} ({int(count)})'
+            display_text = f'{int(round(snr))} ({count})'
 
-        # Compute the slope
-        slope = compute_slope(df, zone, band)
-        slope_arrow = slope_to_unicode(slope)
+        # Compute slope only if we have data
+        if snr is not None and count > 0:
+            slope = compute_slope(df, zone, band)
+            slope_arrow = slope_to_unicode(slope)
 
-        # Determine arrow color
-        if pd.isna(slope) or (-0.1 <= slope <= 0.1):
-            arrow_color = 'black'
-        elif 0.1 < slope <= 0.3:
-            arrow_color = 'green'
-        elif slope > 0.3:
-            arrow_color = 'green'
-        elif -0.3 <= slope < -0.1:
-            arrow_color = 'red'
-        elif slope < -0.3:
-            arrow_color = 'red'
+            # Determine arrow color
+            if pd.isna(slope) or (-0.1 <= slope <= 0.1):
+                arrow_color = 'black'
+            elif 0.1 < slope <= 0.3:
+                arrow_color = 'green'
+            elif slope > 0.3:
+                arrow_color = 'green'
+            elif -0.3 <= slope < -0.1:
+                arrow_color = 'red'
+            elif slope < -0.3:
+                arrow_color = 'red'
+            else:
+                arrow_color = 'black'
+
+            styled_arrow = f'<span style="font-size: 16pt; color: {arrow_color};">{slope_arrow}</span>'
+            display_text_with_arrow = f'{display_text} {styled_arrow}'
         else:
-            arrow_color = 'black'
+            display_text_with_arrow = display_text
 
-        styled_arrow = f'<span style="font-size: 16pt; color: {arrow_color};">{slope_arrow}</span>'
-        display_text_with_arrow = f'{display_text} {styled_arrow}'
+        # Get spotted stations only if we have data
+        if count > 0:
+            relevant_spots = df[(df['zone'] == zone) & (df['band'] == band)].copy()
+            unique_stations = sorted(set(relevant_spots['spotted_station']))
+            
+            tooltip_id = f"tooltip_content_{row_index}_{band}"
+            
+            chunk_size = 10
+            chunks = [unique_stations[i:i + chunk_size] for i in range(0, len(unique_stations), chunk_size)]
+            
+            tooltip_content_html = "<div style='display: flex;'>"
+            for chunk in chunks:
+                tooltip_content_html += "<ul style='margin: 0 10px; padding: 0; list-style: none;'>"
+                for station in chunk:
+                    escaped_station = html.escape(station)
+                    tooltip_content_html += f"<li>{escaped_station}</li>"
+                tooltip_content_html += "</ul>"
+            tooltip_content_html += "</div>"
 
-        # Filter DataFrame for the given zone and band
-        relevant_spots = df[(df['zone'] == zone) & (df['band'] == band)].copy()
-        unique_stations = sorted(set(relevant_spots['spotted_station']))
-        
-        tooltip_id = f"tooltip_content_{row_index}_{band}"
-        
-        chunk_size = 10
-        chunks = [unique_stations[i:i + chunk_size] for i in range(0, len(unique_stations), chunk_size)]
-        
-        tooltip_content_html = "<div style='display: flex;'>"
-        for chunk in chunks:
-            tooltip_content_html += "<ul style='margin: 0 10px; padding: 0; list-style: none;'>"
-            for station in chunk:
-                escaped_station = html.escape(station)
-                tooltip_content_html += f"<li>{escaped_station}</li>"
-            tooltip_content_html += "</ul>"
-        tooltip_content_html += "</div>"
+            cell_html = f'''
+                <span class="tooltip" data-tooltip-content="#{tooltip_id}">{display_text_with_arrow}</span>
+            '''
 
-        cell_html = f'''
-            <span class="tooltip" data-tooltip-content="#{tooltip_id}">{display_text_with_arrow}</span>
-        '''
+            return cell_html, (tooltip_id, tooltip_content_html)
+        else:
+            # Return empty cell without tooltip for no data
+            return "", None
 
-        return cell_html, (tooltip_id, tooltip_content_html)
     except Exception as e:
         print(f"Error processing zone {zone if 'zone' in locals() else 'unknown'} and band {band}: {str(e)}")
         return "", None
