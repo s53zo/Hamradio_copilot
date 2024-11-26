@@ -141,7 +141,7 @@ def upload_file_to_s3(file_name, bucket_name, acc_key, sec_key):
 
 def reformat_table(table):
     """
-    Reformats the pivot table with proper handling of empty values.
+    Reformats the pivot table with proper handling of empty values and zone tooltips.
     """
     try:
         # Create a base DataFrame with all zones
@@ -150,7 +150,7 @@ def reformat_table(table):
         # If table is empty or None, return the base frame with empty cells
         if table is None or table.empty:
             all_zones['zone_display'] = all_zones['zone'].apply(
-                lambda x: f'<span title="{zone_name_map.get(int(x), "Unknown Zone")}">{str(int(x)).zfill(2)}</span>'
+                lambda x: f'<span class="zone-info" title="{zone_name_map.get(int(x), "Unknown Zone")}">{str(int(x)).zfill(2)}</span>'
             )
             for band in band_order:
                 all_zones[band] = ''
@@ -162,9 +162,9 @@ def reformat_table(table):
         # Merge with all_zones to ensure all zones are present
         flattened = pd.merge(all_zones, flattened, on='zone', how='left')
         
-        # Create zone_display column
+        # Create zone_display column with tooltips
         flattened['zone_display'] = flattened['zone'].apply(
-            lambda x: f'<span title="{zone_name_map.get(int(x), "Unknown Zone")}">{str(int(x)).zfill(2)}</span>'
+            lambda x: f'<span class="zone-info" title="{zone_name_map.get(int(x), "Unknown Zone")}">{str(int(x)).zfill(2)}</span>'
         )
         
         # Sort by zone and reset index
@@ -252,7 +252,7 @@ def compute_slope(df, zone, band):
         
 def combine_snr_count(mean_table_row, count_table, band, df, row_index):
     """
-    Combines SNR and count data with proper empty value handling.
+    Combines SNR and count data with proper empty value handling and smaller count numbers.
     """
     try:
         zone = mean_table_row['zone']
@@ -277,13 +277,13 @@ def combine_snr_count(mean_table_row, count_table, band, df, row_index):
             except (ValueError, TypeError):
                 count = 0
 
-        # Generate display text
+        # Generate display text with smaller count numbers
         if snr is None and count == 0:
             return "", None
         elif snr is None:
-            display_text = f'N/A ({count})'
+            display_text = f'N/A <span class="count-text">({count})</span>'
         else:
-            display_text = f'{int(round(snr))} ({count})'
+            display_text = f'{int(round(snr))} <span class="count-text">({count})</span>'
 
         # Compute slope and get arrow only if we have data
         if snr is not None and count > 0:
@@ -298,7 +298,7 @@ def combine_snr_count(mean_table_row, count_table, band, df, row_index):
             else:
                 arrow_color = '#dc3545'  # red
 
-            styled_arrow = f'<span style="font-size: 1.1rem; color: {arrow_color};">{slope_arrow}</span>'
+            styled_arrow = f'<span style="font-size: 0.9rem; color: {arrow_color};">{slope_arrow}</span>'
             display_text_with_arrow = f'{display_text} {styled_arrow}'
         else:
             display_text_with_arrow = display_text
@@ -374,16 +374,16 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
         <style>
             body {{
                 margin: 0;
-                padding: 8px;
+                padding: 4px;
                 font-family: 'Roboto', monospace;
-                font-size: 0.9rem;
+                font-size: 0.85rem;
                 background: #ffffff;
             }}
     
             table {{
                 border-collapse: collapse;
                 width: 100%;
-                max-width: 1200px;
+                max-width: 800px;  /* Reduced from 1200px */
                 margin: 0 auto;
                 table-layout: fixed;
             }}
@@ -393,14 +393,14 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
                 top: 0;
                 background-color: rgba(255, 255, 255, 0.95);
                 z-index: 10;
-                padding: 4px;
-                font-size: 0.9rem;
+                padding: 2px;  /* Reduced from 4px */
+                font-size: 0.85rem;
                 border: 1px solid #ddd;
                 font-weight: bold;
             }}
     
             td {{
-                padding: 2px 4px;
+                padding: 1px 2px;  /* Reduced from 2px 4px */
                 border: 1px solid #ddd;
                 text-align: center;
                 white-space: nowrap;
@@ -413,7 +413,7 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
             }}
     
             td:first-child {{
-                width: 45px;
+                width: 35px;  /* Reduced from 45px */
                 font-weight: bold;
             }}
     
@@ -429,11 +429,12 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
     
             .station-list {{
                 display: grid;
-                grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+                grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
                 gap: 2px;
                 margin: 0;
                 padding: 0;
                 list-style: none;
+                font-size: 0.75rem;  /* Smaller font for station lists */
             }}
     
             .tooltip_templates {{
@@ -441,9 +442,20 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
             }}
     
             caption {{
-                padding: 4px;
-                font-size: 0.9rem;
+                padding: 2px;  /* Reduced from 4px */
+                font-size: 0.85rem;
                 font-weight: bold;
+            }}
+
+            .count-text {{
+                font-size: 0.7rem;  /* Smaller font for count numbers */
+                color: #666;
+            }}
+
+            .zone-tooltip {{
+                max-width: 300px;
+                font-size: 0.8rem;
+                line-height: 1.2;
             }}
         </style>
         <link rel="stylesheet" href="https://unpkg.com/tippy.js@6/animations/scale.css">
@@ -455,6 +467,7 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
         <script src="https://unpkg.com/tippy.js@6/dist/tippy-bundle.umd.min.js"></script>
         <script>
             document.addEventListener('DOMContentLoaded', function() {{
+                // For station list tooltips
                 tippy('.tooltip', {{
                     content(reference) {{
                         const id = reference.getAttribute('data-tooltip-content');
@@ -468,12 +481,18 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
                     placement: 'top',
                     theme: 'light',
                 }});
+
+                // For zone description tooltips
+                tippy('.zone-info', {{
+                    animation: 'scale',
+                    theme: 'light',
+                }});
             }});
         </script>
     </body>
     </html>
     """
-        return template
+    return template
   
 def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False):
     # Connect to the SQLite database
@@ -934,7 +953,7 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
                     <!-- Tooltip content is included here and will be hidden -->
                     {tooltip_content_html}
                 </div>
-                <div>{legend_html}</div>
+#                <div>{legend_html}</div>
             </div>
         </div>
         <!-- Include Tooltip.js JS -->
