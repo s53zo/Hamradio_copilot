@@ -221,40 +221,39 @@ def slope_to_unicode(slope):
 def compute_slope(df, zone, band):
     """
     Computes the slope of SNR over time for a given zone and band.
-    :param df: The dataframe containing SNR data.
-    :param zone: The zone to filter on.
-    :param band: The band to filter on.
-    :return: The slope of SNR over time.
     """
     # Filter DataFrame for the given zone and band
-    relevant_spots = df[(df['zone'] == zone) & (df['band'] == band)]
+    relevant_spots = df[(df['zone'] == zone) & (df['band'] == band)].copy()  # Create explicit copy
 
     if len(relevant_spots) < 2:
-        return np.nan  # Not enough data points to compute a slope
+        return np.nan
 
-    # Convert timestamps to numerical values (e.g., Unix timestamp in minutes)
-    relevant_spots['minute'] = relevant_spots['timestamp'].dt.floor('min')  # Round to nearest minute
+    # Convert timestamps to numerical values
+    relevant_spots.loc[:, 'minute'] = relevant_spots['timestamp'].dt.floor('min')
     avg_per_minute = relevant_spots.groupby('minute')['snr'].mean().reset_index()
 
     if len(avg_per_minute) < 2:
         return np.nan
 
-    time_values = avg_per_minute['minute'].astype(np.int64) // 1e9 / 60  # Convert to minutes
+    time_values = avg_per_minute['minute'].astype(np.int64) // 1e9 / 60
     snr_values = avg_per_minute['snr']
 
-    # Perform linear regression
-    slope, intercept, r_value, p_value, std_err = linregress(time_values, snr_values)
+    try:
+        slope, _, _, _, _ = linregress(time_values, snr_values)
+        return slope
+    except Exception as e:
+        print(f"Error calculating slope: {e}")
+        return np.nan
 
-    return slope
         
 def combine_snr_count(mean_table_row, count_table, band, df, row_index):
     """
-    Combines SNR and count data with error handling for missing indices.
+    Combines SNR and count data safely.
     """
     try:
         zone = mean_table_row['zone']
-        snr = mean_table_row[band] if band in mean_table_row else None
-        # Safely get count value with fallback to 0 if not found
+        # Convert SNR to float and handle NaN values
+        snr = pd.to_numeric(mean_table_row[band], errors='coerce') if band in mean_table_row else None
         count = count_table.at[row_index, band] if band in count_table.columns else 0
 
         if pd.isna(snr) and count == 0:
@@ -264,12 +263,11 @@ def combine_snr_count(mean_table_row, count_table, band, df, row_index):
         else:
             display_text = f'{int(round(snr))} ({int(count)})'
 
-        # Compute the slope for this zone and band
+        # Compute the slope
         slope = compute_slope(df, zone, band)
-        # Convert the slope to a Unicode arrow
         slope_arrow = slope_to_unicode(slope)
 
-        # Determine the arrow color
+        # Determine arrow color
         if pd.isna(slope) or (-0.1 <= slope <= 0.1):
             arrow_color = 'black'
         elif 0.1 < slope <= 0.3:
@@ -287,10 +285,9 @@ def combine_snr_count(mean_table_row, count_table, band, df, row_index):
         display_text_with_arrow = f'{display_text} {styled_arrow}'
 
         # Filter DataFrame for the given zone and band
-        relevant_spots = df[(df['zone'] == zone) & (df['band'] == band)]
+        relevant_spots = df[(df['zone'] == zone) & (df['band'] == band)].copy()
         unique_stations = sorted(set(relevant_spots['spotted_station']))
         
-        # Generate tooltip ID and content
         tooltip_id = f"tooltip_content_{row_index}_{band}"
         
         chunk_size = 10
@@ -342,7 +339,7 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
     
     # Read data from the SQLite table `callsigns` into a pandas DataFrame
     query = """
-    SELECT zone, band, snr, timestamp, spotter, spotted_station
+    SELECT zone, band, CAST(snr AS FLOAT) as snr, timestamp, spotter, spotted_station
     FROM callsigns
     """
     
@@ -353,7 +350,7 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
             dtype={
                 'zone': 'Int64',
                 'band': 'str',
-                'snr': 'float',
+                'snr': 'float',  # Explicitly set SNR as float
                 'spotter': 'str',
                 'spotted_station': 'str'
             }
@@ -365,7 +362,7 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
         print(f"Error: Unable to read data from the SQLite database. {e}")
         return
     finally:
-        conn.close()  # Close the database connection after reading the data
+        conn.close()
 
     if debug:
         print("Initial DataFrame:")
@@ -416,6 +413,10 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
         observed=True,
         dropna=False
     )
+
+    # Convert numeric columns to float
+    numeric_columns = mean_table.select_dtypes(include=['number']).columns
+    mean_table[numeric_columns] = mean_table[numeric_columns].astype('float')
 
     # Ensure both tables have the same index
     all_zones = sorted(set(count_table.index) | set(mean_table.index))
