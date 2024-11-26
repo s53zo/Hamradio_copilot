@@ -605,22 +605,19 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
     # Define the function to map SNR values to colors
     def snr_to_color(val):
         if pd.isna(val) or val == ' ':
-            return 'background-color: #ffffff'  # Set empty cells to white
+            return 'background-color: #ffffff; padding: 1px 2px;'  # Added padding
         else:
             try:
                 val = float(val)
             except ValueError:
-                return 'background-color: #ffffff'  # Also set invalid values to white
-            # Clip the SNR value between snr_min and snr_max
+                return 'background-color: #ffffff; padding: 1px 2px;'
             val_clipped = max(min(val, snr_max), snr_min)
-            # Normalize between 0 and 1
             norm_val = (val_clipped - snr_min) / (snr_max - snr_min)
-            # Get color from custom_cmap
             rgba_color = custom_cmap(norm_val)
-            # Convert RGBA to hex
             rgb_color = tuple(int(255 * x) for x in rgba_color[:3])
             hex_color = '#%02x%02x%02x' % rgb_color
-            return f'background-color: {hex_color}'
+            # Added padding and font-size to the background-color style
+            return f'background-color: {hex_color}; padding: 1px 2px; font-size: 0.85rem;'
 
     # Apply color map to mean_table (excluding 'zone' and 'zone_display' columns)
     means_no_zone = mean_table.drop(columns=['zone', 'zone_display'], errors='ignore')
@@ -660,27 +657,49 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
     # Rename 'zone_display' to 'zone' for display
     combined_table = combined_table.rename(columns={'zone_display': 'zone'})
 
-    # Apply the styles to the combined table.
+    # Apply the styles to the combined table
     styled_table1 = combined_table.style.apply(lambda x: color_table1, axis=None).set_caption(caption_string)
 
     styled_table1.set_properties(subset=['zone'], **{'font-weight': 'bold'})
     styled_table1.set_properties(**{'text-align': 'center'})
 
-    # Set table styles to different parts of the table.
+    # Set table styles to different parts of the table
     styled_table1.set_table_styles([
-        {'selector': 'caption', 'props': [('font-size', '0.9rem'), ('font-weight', 'bold')]},
-        {'selector': 'th',
-         'props': [('font-size', '0.9rem'), ('padding', '4px'), ('position', 'sticky'),
-                   ('top', '0'), ('background-color', 'rgba(255, 255, 255, 0.95)'), ('z-index', '1')]},
-        {'selector': 'td:first-child', 'props': [('font-weight', 'bold'), ('width', '45px')]}
+        {'selector': 'caption', 'props': [
+            ('font-size', '0.85rem'),  # Reduced from 13pt
+            ('font-weight', 'bold'),
+            ('padding', '2px')
+        ]},
+        {'selector': 'th', 'props': [
+            ('font-size', '0.85rem'),  # Reduced from 12pt
+            ('padding', '2px'),        # Reduced from 4px
+            ('position', 'sticky'),
+            ('top', '0'),
+            ('background-color', 'rgba(255, 255, 255, 0.95)'),
+            ('z-index', '1'),
+            ('font-weight', 'bold'),
+            ('white-space', 'nowrap')
+        ]},
+        {'selector': 'td', 'props': [
+            ('padding', '1px 2px'),    # Reduced padding
+            ('font-size', '0.85rem'),  # Consistent font size
+            ('white-space', 'nowrap')
+        ]},
+        {'selector': 'td:first-child', 'props': [
+            ('font-weight', 'bold'),
+            ('width', '35px'),         # Reduced from 45px
+            ('min-width', '35px')
+        ]}
     ])
 
-    # Convert the styled table to HTML.
+    # Convert the styled table to HTML
     html1 = styled_table1.hide(axis="index").to_html()
 
-    html1 = html1.replace('<table ',
-                          '<table style="width: 60vw; table-layout: fixed; margin-left: auto; margin-right: auto;" ')
-
+    # Update the table style
+    html1 = html1.replace(
+        '<table ',
+        '<table style="width: 100%; max-width: 800px; margin: 0 auto; table-layout: fixed;" '
+    )
     if debug:
         print("Generated HTML Table:")
         print(html1[:500])  # Print the first 500 characters of the HTML
