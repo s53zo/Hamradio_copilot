@@ -615,11 +615,11 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
 
     # Set table styles to different parts of the table.
     styled_table1.set_table_styles([
-        {'selector': 'caption', 'props': [('font-size', '13pt'), ('font-weight', 'bold')]},
+        {'selector': 'caption', 'props': [('font-size', '0.9rem'), ('font-weight', 'bold')]},
         {'selector': 'th',
-         'props': [('font-size', '12pt'), ('word-wrap', 'break-word'), ('position', 'sticky'),
-                   ('top', '0'), ('background-color', 'rgba(255, 255, 255, 0.75)'), ('z-index', '1')]},
-        {'selector': 'td:first-child', 'props': [('font-weight', 'bold')]}  # First column
+         'props': [('font-size', '0.9rem'), ('padding', '4px'), ('position', 'sticky'),
+                   ('top', '0'), ('background-color', 'rgba(255, 255, 255, 0.95)'), ('z-index', '1')]},
+        {'selector': 'td:first-child', 'props': [('font-weight', 'bold'), ('width', '45px')]}
     ])
 
     # Convert the styled table to HTML.
