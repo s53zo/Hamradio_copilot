@@ -486,24 +486,15 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
 
     # Iterate over each band to combine mean and count using the helper function
     for band in band_order:
-        if band in mean_table.columns and band in count_table.columns:
-            combined_results = mean_table.apply(
-                lambda row: combine_snr_count(
-                    row[band],
-                    count_table.at[row.name, band],
-                    band,
-                    row['zone'],  # 'zone' is numeric
-                    df,
-                    row.name  # Pass the row index to generate unique IDs
-                ),
-                axis=1
-            )
-            combined_table[band] = combined_results.apply(lambda x: x[0])
+        if band in mean_table.columns:
+            combined_results = []
+            for idx, row in mean_table.iterrows():
+                result = combine_snr_count(row, count_table, band, df, idx)
+                combined_results.append(result)
+            
+            combined_table[band] = [result[0] for result in combined_results]
             # Collect tooltip contents
-            for result in combined_results:
-                content = result[1]
-                if content:
-                    tooltip_contents.append(content)
+            tooltip_contents.extend([content for _, content in combined_results if content])
         else:
             combined_table[band] = ' '
 
