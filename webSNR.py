@@ -250,46 +250,80 @@ def compute_slope(df, zone, band):
         return np.nan
 
         
-def combine_snr_count(snr, count, band, zone, df, row_index):
+def combine_snr_count(mean_table_row, count_table, band, df, row_index):
     """
-    Creates a more compact cell display combining SNR and count information.
+    Combines SNR and count data with proper empty value handling.
     """
-    if pd.isna(snr) and count == 0:
+    try:
+        zone = mean_table_row['zone']
+        
+        # Handle SNR value
+        snr = mean_table_row[band] if band in mean_table_row else None
+        if isinstance(snr, str) and snr.strip() == '':
+            snr = None
+        elif snr is not None:
+            try:
+                snr = float(snr)
+            except (ValueError, TypeError):
+                snr = None
+        
+        # Handle count value
+        count = count_table.at[row_index, band] if band in count_table.columns else 0
+        if pd.isna(count) or (isinstance(count, str) and count.strip() == ''):
+            count = 0
+        else:
+            try:
+                count = int(count)
+            except (ValueError, TypeError):
+                count = 0
+
+        # Generate display text
+        if snr is None and count == 0:
+            return "", None
+        elif snr is None:
+            display_text = f'N/A ({count})'
+        else:
+            display_text = f'{int(round(snr))} ({count})'
+
+        # Compute slope and get arrow only if we have data
+        if snr is not None and count > 0:
+            slope = compute_slope(df, zone, band)
+            slope_arrow = slope_to_unicode(slope)
+
+            # Determine arrow color
+            if pd.isna(slope) or (-0.1 <= slope <= 0.1):
+                arrow_color = '#000000'  # black
+            elif slope > 0.1:
+                arrow_color = '#28a745'  # green
+            else:
+                arrow_color = '#dc3545'  # red
+
+            styled_arrow = f'<span style="font-size: 1.1rem; color: {arrow_color};">{slope_arrow}</span>'
+            display_text_with_arrow = f'{display_text} {styled_arrow}'
+        else:
+            display_text_with_arrow = display_text
+
+        # Get spotted stations only if we have data
+        if count > 0:
+            relevant_spots = df[(df['zone'] == zone) & (df['band'] == band)].copy()
+            unique_stations = sorted(set(relevant_spots['spotted_station']))
+            
+            tooltip_id = f"tooltip_{row_index}_{band}"
+            
+            tooltip_content_html = '<div class="station-list">'
+            for station in unique_stations:
+                tooltip_content_html += f'<div>{html.escape(station)}</div>'
+            tooltip_content_html += '</div>'
+
+            cell_html = f'<span class="tooltip" data-tooltip-content="#{tooltip_id}">{display_text_with_arrow}</span>'
+            
+            return cell_html, (tooltip_id, tooltip_content_html)
+        else:
+            return display_text_with_arrow, None
+
+    except Exception as e:
+        print(f"Error processing zone {zone if 'zone' in locals() else 'unknown'} and band {band}: {str(e)}")
         return "", None
-    elif pd.isna(snr):
-        display_text = f'N/A ({int(count)})'
-    else:
-        display_text = f'{int(round(snr))} ({int(count)})'
-
-    slope = compute_slope(df, zone, band)
-    slope_arrow = slope_to_unicode(slope)
-
-    if pd.isna(slope) or (-0.1 <= slope <= 0.1):
-        arrow_color = '#000000'  # black
-    elif slope > 0.1:
-        arrow_color = '#28a745'  # green
-    else:
-        arrow_color = '#dc3545'  # red
-
-    styled_arrow = f'<span style="font-size: 1.1rem; color: {arrow_color};">{slope_arrow}</span>'
-    display_text_with_arrow = f'{display_text} {styled_arrow}'
-
-    if count > 0:
-        relevant_spots = df[(df['zone'] == zone) & (df['band'] == band)]
-        unique_stations = sorted(set(relevant_spots['spotted_station']))
-        
-        tooltip_id = f"tooltip_{row_index}_{band}"
-        
-        tooltip_content_html = '<div class="station-list">'
-        for station in unique_stations:
-            tooltip_content_html += f'<div>{html.escape(station)}</div>'
-        tooltip_content_html += '</div>'
-
-        cell_html = f'<span class="tooltip" data-tooltip-content="#{tooltip_id}">{display_text_with_arrow}</span>'
-        
-        return cell_html, (tooltip_id, tooltip_content_html)
-    else:
-        return display_text_with_arrow, None
     
 def create_custom_colormap():
     # Define the colors and positions according to the percentage mapping
