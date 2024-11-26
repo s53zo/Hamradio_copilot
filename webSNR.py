@@ -484,11 +484,12 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
             .tooltip {{
                 cursor: pointer;
             }}
-    
+
             .station-list {{
                 display: grid;
-                grid-template-columns: repeat(4, minmax(50px, 1fr));
+                grid-template-columns: repeat(auto-fit, minmax(70px, 1fr));
                 min-width: 600px;
+                max-width: 70%;
                 gap: 2px;
                 padding: 4px;
                 background: #f0f0f0;
