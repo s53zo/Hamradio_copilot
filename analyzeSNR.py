@@ -142,7 +142,7 @@ def upload_file_to_s3(file_name, bucket_name, acc_key, sec_key):
 def reformat_table(table):
     """
     Reformats the pivot table into a DataFrame convenient for HTML display.
-    Includes enhanced error handling and data validation.
+    Ensures all zones from 1 to 40 are included.
     """
     try:
         # Flatten the pivot table
@@ -155,21 +155,22 @@ def reformat_table(table):
         # Ensure 'zone' is numeric with error handling
         flattened['zone'] = pd.to_numeric(flattened['zone'], errors='coerce')
         
-        # Remove any rows where zone is NaN
-        flattened = flattened.dropna(subset=['zone'])
+        # Fill any missing zones
+        all_zones = pd.DataFrame({'zone': range(1, 41)})
+        flattened = pd.merge(all_zones, flattened, on='zone', how='left')
         
         # Sort by 'zone'
         flattened = flattened.sort_values(by='zone')
         
-        # Create 'zone_display' with HTML formatting and error handling
+        # Create 'zone_display' with HTML formatting
         flattened['zone_display'] = flattened['zone'].apply(
-            lambda x: f'<span title="{zone_name_map.get(int(x), "Unknown Zone")}">{str(int(x)).zfill(2)}</span>' 
+            lambda x: f'<span title="{zone_name_map.get(int(x), "Unknown Zone")}">{str(int(x)).zfill(2)}</span>'
             if pd.notnull(x) else '')
         
         # Reset index after sorting
         flattened.reset_index(drop=True, inplace=True)
         
-        # Rearrange columns with error handling
+        # Rearrange columns
         columns_order = ['zone', 'zone_display'] + [col for col in band_order if col in flattened.columns]
         existing_columns = [col for col in columns_order if col in flattened.columns]
         flattened = flattened[existing_columns]
@@ -181,8 +182,8 @@ def reformat_table(table):
     except Exception as e:
         print(f"Error in reformat_table: {str(e)}")
         # Return a minimal valid DataFrame in case of error
-        return pd.DataFrame({'zone': [], 'zone_display': []})
-
+        return pd.DataFrame({'zone': range(1, 41), 'zone_display': [f'{str(i).zfill(2)}' for i in range(1, 41)]})
+      
 def delete_old(df, time_hours):
     """
     Deletes entries older than the specified time range from the dataframe.
@@ -333,6 +334,37 @@ def create_custom_colormap():
     cmap = LinearSegmentedColormap.from_list("custom_cmap", list(zip(positions, color_codes)))
     return cmap
 
+def generate_empty_cell_style(total_zones=40):
+    """Generate CSS for empty cells for all zones"""
+    empty_cell_styles = []
+    for i in range(total_zones):
+        for band in band_order:
+            empty_cell_styles.append(f"""
+            #T_table_row{i}_col{band} {{
+                background-color: #ffffff;
+                text-align: center;
+            }}
+            """)
+    return "\n".join(empty_cell_styles)
+
+def generate_html_template(table_html, tooltip_content_html, caption_string):
+    style_block = f"""
+    <style>
+        /* ... existing styles ... */
+        
+        /* Empty cell styling */
+        {generate_empty_cell_style()}
+        
+        /* Force all cells to be visible */
+        tr {{
+            display: table-row !important;
+        }}
+        td {{
+            display: table-cell !important;
+        }}
+    </style>
+    """
+  
 def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False):
     # Connect to the SQLite database
     conn = sqlite3.connect('callsigns.db')
@@ -384,26 +416,16 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
     df['band'] = df['band'].astype('category')
     df['band'] = df['band'].cat.set_categories(band_order)
 
-#    # Generate the pivot tables for the aggregated data
-#    count_table = df.pivot_table(
-#        values=('spotter', 'spotted_station'),
-#        values='snr',
-#        index='zone',
-#        columns='band',
-#        aggfunc=lambda x: len(set(zip(df.loc[x.index, 'spotter'], df.loc[x.index, 'spotted_station']))),
-#        aggfunc='count',
-#        fill_value=0,
-#        dropna=False
-#    )
+    all_zones = pd.Index(range(1, 41), name='zone')
 
-#Unique spot spotter combination
+    # Ensure both tables have all zones
     count_table = df.groupby(['zone', 'band'], observed=True).agg(
         count=('spotter', lambda x: len(set(zip(x, df.loc[x.index, 'spotted_station']))))
     ).reset_index().pivot(
         index='zone',
         columns='band',
         values='count'
-    ).fillna(0)
+    ).reindex(all_zones, fill_value=0)  # Reindex with all zones
 
     mean_table = df.pivot_table(
         values='snr',
@@ -412,7 +434,7 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
         aggfunc='median',
         observed=True,
         dropna=False
-    )
+    ).reindex(all_zones)  # Reindex with all zones
 
     # Convert numeric columns to float
     numeric_columns = mean_table.select_dtypes(include=['number']).columns
