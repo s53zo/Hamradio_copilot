@@ -147,10 +147,10 @@ def reformat_table(table):
         # Create a base DataFrame with all zones
         all_zones = pd.DataFrame({'zone': range(1, 41)})
         
-        # If table is empty or None, return the base frame with empty cells
         if table is None or table.empty:
+            # Modified tooltip structure
             all_zones['zone_display'] = all_zones['zone'].apply(
-                lambda x: f'<span class="zone-info" title="{zone_name_map.get(int(x), "Unknown Zone")}">{str(int(x)).zfill(2)}</span>'
+                lambda x: f'<span class="zone-tooltip" data-tippy-content="{zone_name_map.get(int(x), "Unknown Zone")}">{str(int(x)).zfill(2)}</span>'
             )
             for band in band_order:
                 all_zones[band] = ''
@@ -162,15 +162,15 @@ def reformat_table(table):
         # Merge with all_zones to ensure all zones are present
         flattened = pd.merge(all_zones, flattened, on='zone', how='left')
         
-        # Create zone_display column with tooltips
+        # Create zone_display column with tooltips - Modified structure
         flattened['zone_display'] = flattened['zone'].apply(
-            lambda x: f'<span class="zone-info" title="{zone_name_map.get(int(x), "Unknown Zone")}">{str(int(x)).zfill(2)}</span>'
+            lambda x: f'<span class="zone-tooltip" data-tippy-content="{zone_name_map.get(int(x), "Unknown Zone")}">{str(int(x)).zfill(2)}</span>'
         )
         
         # Sort by zone and reset index
         flattened = flattened.sort_values(by='zone').reset_index(drop=True)
         
-        # Ensure all band columns exist with empty strings for missing values
+        # Ensure all band columns exist
         for band in band_order:
             if band not in flattened.columns:
                 flattened[band] = ''
@@ -362,7 +362,7 @@ def generate_empty_cell_style(total_zones=40):
 
 def generate_html_template(snr_table_html, tooltip_content_html, caption_string):
     """
-    Generates a more compact HTML template without the legend.
+    Generates a more compact HTML template with working tooltips.
     """
     template = f"""
     <!DOCTYPE html>
@@ -383,7 +383,7 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
             table {{
                 border-collapse: collapse;
                 width: 100%;
-                max-width: 800px;  /* Reduced from 1200px */
+                max-width: 800px;
                 margin: 0 auto;
                 table-layout: fixed;
             }}
@@ -393,14 +393,14 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
                 top: 0;
                 background-color: rgba(255, 255, 255, 0.95);
                 z-index: 10;
-                padding: 2px;  /* Reduced from 4px */
+                padding: 2px;
                 font-size: 0.85rem;
                 border: 1px solid #ddd;
                 font-weight: bold;
             }}
     
             td {{
-                padding: 1px 2px;  /* Reduced from 2px 4px */
+                padding: 1px 2px;
                 border: 1px solid #ddd;
                 text-align: center;
                 white-space: nowrap;
@@ -413,12 +413,29 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
             }}
     
             td:first-child {{
-                width: 35px;  /* Reduced from 45px */
+                width: 35px;
                 font-weight: bold;
             }}
     
             .tooltip {{
                 cursor: pointer;
+            }}
+
+            .zone-tooltip {{
+                cursor: help;
+            }}
+    
+            .tippy-box[data-theme~='zone'] {{
+                background-color: #333;
+                color: white;
+                font-size: 0.8rem;
+                max-width: 350px;
+                padding: 4px 8px;
+                line-height: 1.4;
+            }}
+            
+            .tippy-box[data-theme~='zone'] .tippy-content {{
+                padding: 6px 10px;
             }}
     
             .tippy-content {{
@@ -434,7 +451,7 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
                 margin: 0;
                 padding: 0;
                 list-style: none;
-                font-size: 0.75rem;  /* Smaller font for station lists */
+                font-size: 0.75rem;
             }}
     
             .tooltip_templates {{
@@ -442,20 +459,14 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
             }}
     
             caption {{
-                padding: 2px;  /* Reduced from 4px */
+                padding: 2px;
                 font-size: 0.85rem;
                 font-weight: bold;
             }}
 
             .count-text {{
-                font-size: 0.7rem;  /* Smaller font for count numbers */
+                font-size: 0.7rem;
                 color: #666;
-            }}
-
-            .zone-tooltip {{
-                max-width: 300px;
-                font-size: 0.8rem;
-                line-height: 1.2;
             }}
         </style>
         <link rel="stylesheet" href="https://unpkg.com/tippy.js@6/animations/scale.css">
@@ -467,7 +478,7 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
         <script src="https://unpkg.com/tippy.js@6/dist/tippy-bundle.umd.min.js"></script>
         <script>
             document.addEventListener('DOMContentLoaded', function() {{
-                // For station list tooltips
+                // Initialize tooltips for station lists
                 tippy('.tooltip', {{
                     content(reference) {{
                         const id = reference.getAttribute('data-tooltip-content');
@@ -482,10 +493,15 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
                     theme: 'light',
                 }});
 
-                // For zone description tooltips
-                tippy('.zone-info', {{
+                // Initialize tooltips for zones
+                tippy('.zone-tooltip', {{
+                    content(reference) {{
+                        return reference.getAttribute('data-tippy-content');
+                    }},
+                    placement: 'right',
                     animation: 'scale',
-                    theme: 'light',
+                    theme: 'zone',
+                    delay: [200, 0],  // Small delay before showing
                 }});
             }});
         </script>
