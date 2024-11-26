@@ -667,8 +667,10 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
     # Tooltip content list
     tooltip_contents = []
 
-    # Apply colors and combine data
-    color_table = pd.DataFrame(index=mean_table.index, columns=mean_table.columns)
+    # Create color mapping for each cell
+    color_styles = pd.DataFrame('', index=mean_table.index, columns=mean_table.columns)
+    
+    # Iterate through bands and create combined display and colors
     for band in band_order:
         if band in mean_table.columns:
             combined_results = []
@@ -677,14 +679,12 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
                 snr = row[band] if band in row else None
                 count = count_table.at[idx, band] if band in count_table.columns else 0
                 
-                # Set color based on both SNR and count
                 try:
                     count = int(count) if count != '' else 0
                     if not pd.isna(snr) and count > 0:
-                        color_table.at[idx, band] = snr_to_color(snr, count)
+                        color_styles.at[idx, band] = snr_to_color(snr, count)
                 except (ValueError, TypeError):
                     count = 0
-                    color_table.at[idx, band] = snr_to_color(snr, count)
                 
                 # Combine SNR and count display
                 result = combine_snr_count(row, count_table, band, df, idx)
@@ -703,9 +703,10 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
     # Ensure the columns are ordered as per band_order
     combined_table = combined_table[['zone_display'] + band_order]
     combined_table = combined_table.rename(columns={'zone_display': 'zone'})
+    color_styles = color_styles[band_order]  # Match columns with combined_table
 
     # Apply the styles to the combined table
-    styled_table = combined_table.style.apply(lambda x: color_table, axis=None).set_caption(caption_string)
+    styled_table = combined_table.style.apply(lambda x: color_styles, axis=None).set_caption(caption_string)
 
     styled_table.set_properties(subset=['zone'], **{'font-weight': 'bold'})
     styled_table.set_properties(**{'text-align': 'center'})
