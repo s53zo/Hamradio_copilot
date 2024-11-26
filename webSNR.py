@@ -429,10 +429,7 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
             .zone-tooltip:hover {{
                 background-color: rgba(0, 0, 0, 0.05);
             }}
-    
-            .tooltip {{
-                cursor: pointer;
-            }}
+               
 
             .tippy-box[data-theme~='zone'] {{
                 background-color: #333;
