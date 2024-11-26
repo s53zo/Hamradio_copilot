@@ -510,7 +510,7 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
                     placement: 'right',
                     animation: 'scale',
                     arrow: true,
-                    delay: [50, 0],
+                    delay: [10, 0],
                 }});
             }});
         </script>
