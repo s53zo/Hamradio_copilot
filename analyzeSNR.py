@@ -375,7 +375,7 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
 #    )
 
 #Unique spot spotter combination
-    count_table = df.groupby(['zone', 'band']).agg(
+    count_table = df.groupby(['zone', 'band'], observed=True).agg(
         count=('spotter', lambda x: len(set(zip(x, df.loc[x.index, 'spotted_station']))))
     ).reset_index().pivot(
         index='zone',
@@ -388,7 +388,8 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
         values='snr',
         index='zone',
         columns='band',
-        aggfunc='median',  # Median calculation
+        aggfunc='median',
+        observed=True,
         dropna=False
     )
 
@@ -446,7 +447,7 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
     # Convert all values to float
     means_no_zone = means_no_zone.apply(pd.to_numeric, errors='coerce')
 
-    color_table1 = means_no_zone.applymap(snr_to_color)
+    color_table1 = means_no_zone.map(snr_to_color)
 
     # Combine mean_table and count_table into a single table with desired cell content
     combined_table = mean_table.copy()
