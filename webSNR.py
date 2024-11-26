@@ -452,15 +452,16 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
             .tippy-content {{
                 font-size: 0.8rem;
                 padding: 4px;
-                max-width: 400px;
+                max-width: none;
             }}
     
             .station-list {{
                 display: grid;
-                grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
-                gap: 2px;
+                grid-template-columns: repeat(8, minmax(70px, 1fr));
+                min-width: 600px;
+                gap: 4px;
                 margin: 0;
-                padding: 0;
+                padding: 4px;
                 list-style: none;
                 font-size: 0.75rem;
             }}
