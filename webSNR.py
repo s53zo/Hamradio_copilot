@@ -148,9 +148,9 @@ def reformat_table(table):
         all_zones = pd.DataFrame({'zone': range(1, 41)})
         
         if table is None or table.empty:
-            # Modified tooltip structure
+            # Create zone_display with tooltip attributes
             all_zones['zone_display'] = all_zones['zone'].apply(
-                lambda x: f'<span class="zone-tooltip" data-tippy-content="{zone_name_map.get(int(x), "Unknown Zone")}">{str(int(x)).zfill(2)}</span>'
+                lambda x: f'<span class="zone-tooltip" title="{zone_name_map.get(int(x), "Unknown Zone")}">{str(int(x)).zfill(2)}</span>'
             )
             for band in band_order:
                 all_zones[band] = ''
@@ -162,9 +162,9 @@ def reformat_table(table):
         # Merge with all_zones to ensure all zones are present
         flattened = pd.merge(all_zones, flattened, on='zone', how='left')
         
-        # Create zone_display column with tooltips - Modified structure
+        # Create zone_display with tooltip attributes
         flattened['zone_display'] = flattened['zone'].apply(
-            lambda x: f'<span class="zone-tooltip" data-tippy-content="{zone_name_map.get(int(x), "Unknown Zone")}">{str(int(x)).zfill(2)}</span>'
+            lambda x: f'<span class="zone-tooltip" title="{zone_name_map.get(int(x), "Unknown Zone")}">{str(int(x)).zfill(2)}</span>'
         )
         
         # Sort by zone and reset index
@@ -468,6 +468,22 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
                 font-size: 0.7rem;
                 color: #666;
             }}
+
+            .zone-tooltip {{
+                cursor: help;
+            }}
+
+            .tippy-box[data-theme~='zone'] {{
+                background-color: #333;
+                color: white;
+                font-size: 0.8rem;
+                max-width: 300px;
+                line-height: 1.3;
+            }}
+
+            .tippy-box[data-theme~='zone'] .tippy-content {{
+                padding: 8px 12px;
+            }}
         </style>
         <link rel="stylesheet" href="https://unpkg.com/tippy.js@6/animations/scale.css">
     </head>
@@ -493,15 +509,12 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
                     theme: 'light',
                 }});
 
-                // Initialize tooltips for zones
+                // Initialize tooltips for zone numbers
                 tippy('.zone-tooltip', {{
-                    content(reference) {{
-                        return reference.getAttribute('data-tippy-content');
-                    }},
+                    theme: 'zone',
                     placement: 'right',
                     animation: 'scale',
-                    theme: 'zone',
-                    delay: [200, 0],  // Small delay before showing
+                    delay: [100, 0],
                 }});
             }});
         </script>
