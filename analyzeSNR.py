@@ -142,23 +142,46 @@ def upload_file_to_s3(file_name, bucket_name, acc_key, sec_key):
 def reformat_table(table):
     """
     Reformats the pivot table into a DataFrame convenient for HTML display.
+    Includes enhanced error handling and data validation.
     """
-    # Flatten the pivot table
-    flattened = table.reset_index()
-    # Ensure 'zone' is numeric
-    flattened['zone'] = pd.to_numeric(flattened['zone'], errors='coerce')
-    # Sort by 'zone'
-    flattened = flattened.sort_values(by='zone')
-    # Create 'zone_display' with HTML formatting
-    flattened['zone_display'] = flattened['zone'].apply(lambda x: f'<span title="{zone_name_map.get(x, "")}">{str(int(x)).zfill(2)}</span>')
-    flattened.reset_index(drop=True, inplace=True)
-    # Rearrange columns
-    columns_order = ['zone', 'zone_display'] + band_order
-    existing_columns = [col for col in columns_order if col in flattened.columns]
-    flattened = flattened[existing_columns]
-    # Fill NaN with appropriate values
-    flattened = flattened.fillna({' ': ' '})
-    return flattened
+    try:
+        # Flatten the pivot table
+        flattened = table.reset_index()
+        
+        # Ensure 'zone' column exists
+        if 'zone' not in flattened.columns:
+            flattened['zone'] = flattened.index
+        
+        # Ensure 'zone' is numeric with error handling
+        flattened['zone'] = pd.to_numeric(flattened['zone'], errors='coerce')
+        
+        # Remove any rows where zone is NaN
+        flattened = flattened.dropna(subset=['zone'])
+        
+        # Sort by 'zone'
+        flattened = flattened.sort_values(by='zone')
+        
+        # Create 'zone_display' with HTML formatting and error handling
+        flattened['zone_display'] = flattened['zone'].apply(
+            lambda x: f'<span title="{zone_name_map.get(int(x), "Unknown Zone")}">{str(int(x)).zfill(2)}</span>' 
+            if pd.notnull(x) else '')
+        
+        # Reset index after sorting
+        flattened.reset_index(drop=True, inplace=True)
+        
+        # Rearrange columns with error handling
+        columns_order = ['zone', 'zone_display'] + [col for col in band_order if col in flattened.columns]
+        existing_columns = [col for col in columns_order if col in flattened.columns]
+        flattened = flattened[existing_columns]
+        
+        # Fill NaN with appropriate values
+        flattened = flattened.fillna(' ')
+        
+        return flattened
+    except Exception as e:
+        print(f"Error in reformat_table: {str(e)}")
+        # Return a minimal valid DataFrame in case of error
+        return pd.DataFrame({'zone': [], 'zone_display': []})
 
 def delete_old(df, time_hours):
     """
@@ -224,70 +247,72 @@ def compute_slope(df, zone, band):
 
     return slope
         
-def combine_snr_count(snr, count, band, zone, df, row_index):
-    if pd.isna(snr) and count == 0:
+def combine_snr_count(mean_table_row, count_table, band, df, row_index):
+    """
+    Combines SNR and count data with error handling for missing indices.
+    """
+    try:
+        zone = mean_table_row['zone']
+        snr = mean_table_row[band] if band in mean_table_row else None
+        # Safely get count value with fallback to 0 if not found
+        count = count_table.at[row_index, band] if band in count_table.columns else 0
+
+        if pd.isna(snr) and count == 0:
+            return "", None
+        elif pd.isna(snr):
+            display_text = f'N/A ({int(count)})'
+        else:
+            display_text = f'{int(round(snr))} ({int(count)})'
+
+        # Compute the slope for this zone and band
+        slope = compute_slope(df, zone, band)
+        # Convert the slope to a Unicode arrow
+        slope_arrow = slope_to_unicode(slope)
+
+        # Determine the arrow color
+        if pd.isna(slope) or (-0.1 <= slope <= 0.1):
+            arrow_color = 'black'
+        elif 0.1 < slope <= 0.3:
+            arrow_color = 'green'
+        elif slope > 0.3:
+            arrow_color = 'green'
+        elif -0.3 <= slope < -0.1:
+            arrow_color = 'red'
+        elif slope < -0.3:
+            arrow_color = 'red'
+        else:
+            arrow_color = 'black'
+
+        styled_arrow = f'<span style="font-size: 16pt; color: {arrow_color};">{slope_arrow}</span>'
+        display_text_with_arrow = f'{display_text} {styled_arrow}'
+
+        # Filter DataFrame for the given zone and band
+        relevant_spots = df[(df['zone'] == zone) & (df['band'] == band)]
+        unique_stations = sorted(set(relevant_spots['spotted_station']))
+        
+        # Generate tooltip ID and content
+        tooltip_id = f"tooltip_content_{row_index}_{band}"
+        
+        chunk_size = 10
+        chunks = [unique_stations[i:i + chunk_size] for i in range(0, len(unique_stations), chunk_size)]
+        
+        tooltip_content_html = "<div style='display: flex;'>"
+        for chunk in chunks:
+            tooltip_content_html += "<ul style='margin: 0 10px; padding: 0; list-style: none;'>"
+            for station in chunk:
+                escaped_station = html.escape(station)
+                tooltip_content_html += f"<li>{escaped_station}</li>"
+            tooltip_content_html += "</ul>"
+        tooltip_content_html += "</div>"
+
+        cell_html = f'''
+            <span class="tooltip" data-tooltip-content="#{tooltip_id}">{display_text_with_arrow}</span>
+        '''
+
+        return cell_html, (tooltip_id, tooltip_content_html)
+    except Exception as e:
+        print(f"Error processing zone {zone if 'zone' in locals() else 'unknown'} and band {band}: {str(e)}")
         return "", None
-    elif pd.isna(snr):
-        display_text = f'N/A ({int(count)})'
-    else:
-        display_text = f'{int(round(snr))} ({int(count)})'
-
-    # Compute the slope for this zone and band
-    slope = compute_slope(df, zone, band)
-    # Convert the slope to a Unicode arrow
-    slope_arrow = slope_to_unicode(slope)
-
-    # Determine the arrow color based on the same thresholds as in slope_to_unicode
-    if pd.isna(slope) or (-0.1 <= slope <= 0.1):
-        arrow_color = 'black'  # Stable or undefined slope
-    elif 0.1 < slope <= 0.3:
-        arrow_color = 'green'  # Slight positive slope
-    elif slope > 0.3:
-        arrow_color = 'green'  # Strong positive slope
-    elif -0.3 <= slope < -0.1:
-        arrow_color = 'red'    # Slight negative slope
-    elif slope < -0.3:
-        arrow_color = 'red'    # Strong negative slope
-    else:
-        arrow_color = 'black'  # Default color
-
-
-    # Style the arrow: increase font size and apply color
-    styled_arrow = f'<span style="font-size: 16pt; color: {arrow_color};">{slope_arrow}</span>'
-
-    # Append the styled arrow to the display text
-    display_text_with_arrow = f'{display_text} {styled_arrow}'
-
-    # Filter DataFrame for the given zone and band
-    relevant_spots = df[(df['zone'] == zone) & (df['band'] == band)]
-
-    # Get unique spotted stations
-    unique_stations = sorted(set(relevant_spots['spotted_station']))
-
-    # Generate a unique ID for the tooltip content
-    tooltip_id = f"tooltip_content_{row_index}_{band}"
-
-    # Split the list into chunks of 10
-    chunk_size = 10
-    chunks = [unique_stations[i:i + chunk_size] for i in range(0, len(unique_stations), chunk_size)]
-
-    # Create tooltip content HTML with multiple columns
-    tooltip_content_html = "<div style='display: flex;'>"
-    for chunk in chunks:
-        tooltip_content_html += "<ul style='margin: 0 10px; padding: 0; list-style: none;'>"
-        for station in chunk:
-            escaped_station = html.escape(station)
-            tooltip_content_html += f"<li>{escaped_station}</li>"
-        tooltip_content_html += "</ul>"
-    tooltip_content_html += "</div>"
-
-    # HTML with data-tooltip-content attribute
-    cell_html = f'''
-        <span class="tooltip" data-tooltip-content="#{tooltip_id}">{display_text_with_arrow}</span>
-    '''
-
-    # Return the cell HTML and the tooltip content
-    return cell_html, (tooltip_id, tooltip_content_html)
     
 def create_custom_colormap():
     # Define the colors and positions according to the percentage mapping
@@ -383,7 +408,6 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
         values='count'
     ).fillna(0)
 
-
     mean_table = df.pivot_table(
         values='snr',
         index='zone',
@@ -392,6 +416,11 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
         observed=True,
         dropna=False
     )
+
+    # Ensure both tables have the same index
+    all_zones = sorted(set(count_table.index) | set(mean_table.index))
+    count_table = count_table.reindex(all_zones, fill_value=0)
+    mean_table = mean_table.reindex(all_zones)
 
     # Reformat the tables
     count_table = reformat_table(count_table)
@@ -451,7 +480,7 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
 
     # Combine mean_table and count_table into a single table with desired cell content
     combined_table = mean_table.copy()
-
+  
     # Tooltip content list
     tooltip_contents = []
 
