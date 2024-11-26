@@ -678,7 +678,12 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
                 count = count_table.at[idx, band] if band in count_table.columns else 0
                 
                 # Set color based on both SNR and count
-                if not pd.isna(snr) and count > 0:
+                try:
+                    count = int(count) if count != '' else 0
+                    if not pd.isna(snr) and count > 0:
+                        color_table.at[idx, band] = snr_to_color(snr, count)
+                except (ValueError, TypeError):
+                    count = 0
                     color_table.at[idx, band] = snr_to_color(snr, count)
                 
                 # Combine SNR and count display
