@@ -360,11 +360,11 @@ def combine_snr_count(mean_table_row, count_table, band, df, row_index):
             unique_stations = sorted(set(relevant_spots['spotted_station']))
             
             tooltip_id = f"tooltip_{row_index}_{band}"
-            
+         
             tooltip_content_html = '<div class="station-list">'
             for station in unique_stations:
                 display_station = station.replace('.', '/') #to avoid KH0.AA3B and have KH0/AA3B
-                tooltip_content_html += f'<div>{html.escape(station)}</div>'
+                tooltip_content_html += f'<div>{html.escape(display_station)}</div>'
             tooltip_content_html += '</div>'
 
             cell_html = f'<span class="tooltip" data-tooltip-content="#{tooltip_id}">{display_text_with_arrow}</span>'
