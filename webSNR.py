@@ -252,7 +252,7 @@ def compute_slope(df, zone, band):
         
 def combine_snr_count(mean_table_row, count_table, band, df, row_index):
     """
-    Combines SNR and count data with proper empty value handling and smaller count numbers.
+    Combines SNR and count data with proper empty value handling and a grid layout for station lists.
     """
     try:
         zone = mean_table_row['zone']
@@ -277,7 +277,7 @@ def combine_snr_count(mean_table_row, count_table, band, df, row_index):
             except (ValueError, TypeError):
                 count = 0
 
-        # Generate display text with smaller count numbers
+        # Generate display text
         if snr is None and count == 0:
             return "", None
         elif snr is None:
@@ -310,6 +310,7 @@ def combine_snr_count(mean_table_row, count_table, band, df, row_index):
             
             tooltip_id = f"tooltip_{row_index}_{band}"
             
+            # Create grid layout of stations
             tooltip_content_html = '<div class="station-list">'
             for station in unique_stations:
                 tooltip_content_html += f'<div>{html.escape(station)}</div>'
@@ -450,9 +451,14 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
             }}
     
             .tippy-content {{
+                padding: 0 !important;
                 font-size: 0.8rem;
-                padding: 4px;
                 max-width: none;
+                background: white;
+            }}
+
+            .tooltip {{
+                cursor: pointer;
             }}
     
             .station-list {{
@@ -460,11 +466,15 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
                 grid-template-columns: repeat(8, minmax(70px, 1fr));
                 min-width: 600px;
                 gap: 4px;
-                margin: 0;
-                padding: 4px;
-                list-style: none;
-                font-size: 0.75rem;
+                padding: 8px;
+                background: white;
             }}
+
+            .station-list div {{
+                padding: 2px 4px;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
     
             .tooltip_templates {{
                 display: none;
