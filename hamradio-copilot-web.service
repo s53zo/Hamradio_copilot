@@ -5,7 +5,7 @@ After=network.target
 [Service]
 User=user
 WorkingDirectory=/opt/hamradio-copilot
-ExecStart=python3 /opt/hamradio-copilot/analyzeSNR.py -o /opt/hamradio-copilot/html/
+ExecStart=python3 /opt/hamradio-copilot/webSNR.py -o /opt/hamradio-copilot/html/
 Restart=always
 
 [Install]
