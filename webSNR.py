@@ -10,10 +10,10 @@ import xml.etree.ElementTree as ET
 import os
 import htmlmin
 import sqlite3
-import numpy as np  # Needed for numeric operations
-import html  # For escaping HTML content
-from matplotlib.colors import LinearSegmentedColormap  # For custom colormap
-from scipy.stats import linregress  # For linear regression
+import numpy as np
+import html
+from matplotlib.colors import LinearSegmentedColormap
+from scipy.stats import linregress
 
 pd.set_option('display.max_columns', None)
 pd.set_option('display.max_rows', None)
@@ -43,7 +43,7 @@ span = args.range
 output_folder = args.output_folder
 use_s3 = args.use_s3
 debug = args.debug
-include_solar_data = args.include_solar_data  # Get the include_solar_data flag
+include_solar_data = args.include_solar_data
 
 #band_order = ['160', '80', '40', '30', '20', '17', '15', '12', '10', '6']
 band_order = ['160', '80', '40', '20', '15', '10']
@@ -93,15 +93,9 @@ zone_name_map = {
 }
 
 def get_aws_credentials():
-    """
-    Prompts the user to input their AWS credentials and the bucket they'd like to upload to.
-
-    :return: A dictionary containing 'aws_access_key_id', 'aws_secret_access_key', and 's3_bucket'.
-    """
     access_key = input("Enter your AWS Access Key ID: ")
     secret_key = input("Enter your AWS Secret Access Key: ")
     bucket = input("Enter the name of the S3 Bucket you'd like to write to: ")
-
     return {
         'aws_access_key_id': access_key,
         'aws_secret_access_key': secret_key,
@@ -111,12 +105,6 @@ def get_aws_credentials():
 def upload_file_to_s3(file_name, bucket_name, acc_key, sec_key):
     """
     Uploads the html file to the AWS S3 bucket.
-
-    :param file_name: The name of the html file being uploaded.
-    :param bucket_name: The name of the bucket being uploaded to.
-    :param acc_key: The AWS access key for S3 access.
-    :param sec_key: The secret access key for the AWS access key.
-    :return: Boolean True if the file was uploaded successfully. False if not uploaded successfully.
     """ 
     creds = {
         'aws_access_key_id': acc_key,
@@ -190,24 +178,14 @@ def reformat_table(table):
 def delete_old(df, time_hours):
     """
     Deletes entries older than the specified time range from the dataframe.
-
-    :param df: The dataframe being modified.
-    :param time_hours: The range of age before deletion in hours.
-    :return: The dataframe without the older entries.
     """
-    # 'timestamp' is already converted to datetime with UTC timezone
     day_ago = datetime.now(dt.timezone.utc) - timedelta(hours=time_hours)
-
-    # Filter out old entries
     df = df[df['timestamp'] >= day_ago].reset_index(drop=True)
     return df
 
 def slope_to_unicode(slope):
     """
-    Converts a slope value to a corresponding Unicode character based on the specified ranges.
-
-    :param slope: The slope value (float) to convert.
-    :return: A Unicode character representing the direction of the slope.
+    Converts a slope value to a corresponding Unicode character.
     """
     if -0.1 <= slope <= 0.1:
         return '\u21D4'  # ⇔
@@ -220,19 +198,17 @@ def slope_to_unicode(slope):
     elif slope < -0.3:
         return '\u21D3'  # ⇓
     else:
-        return ''  # In case of NaN or other unexpected values
+        return ''
 
 def compute_slope(df, zone, band):
     """
     Computes the slope of SNR over time for a given zone and band.
     """
-    # Filter DataFrame for the given zone and band
-    relevant_spots = df[(df['zone'] == zone) & (df['band'] == band)].copy()  # Create explicit copy
+    relevant_spots = df[(df['zone'] == zone) & (df['band'] == band)].copy()
 
     if len(relevant_spots) < 2:
         return np.nan
 
-    # Convert timestamps to numerical values
     relevant_spots.loc[:, 'minute'] = relevant_spots['timestamp'].dt.floor('min')
     avg_per_minute = relevant_spots.groupby('minute')['snr'].mean().reset_index()
 
@@ -249,15 +225,86 @@ def compute_slope(df, zone, band):
         print(f"Error calculating slope: {e}")
         return np.nan
 
+def get_intensity(count, max_count=1000):
+    """
+    Calculate color intensity using exponential scaling.
+    """
+    min_intensity = 0.2
+    max_additional = 0.8
+    a = 5.0 / max_count
+    intensity = min_intensity + max_additional * (1 - np.exp(-a * count))
+    return intensity
+
+def hsl_to_rgb(h, s, l):
+    """
+    Convert HSL to RGB values.
+    """
+    if s == 0:
+        return (l, l, l)
+    
+    def hue_to_rgb(p, q, t):
+        if t < 0:
+            t += 1
+        if t > 1:
+            t -= 1
+        if t < 1/6:
+            return p + (q - p) * 6 * t
+        if t < 1/2:
+            return q
+        if t < 2/3:
+            return p + (q - p) * (2/3 - t) * 6
+        return p
+
+    q = l * (1 + s) if l < 0.5 else l + s - l * s
+    p = 2 * l - q
+
+    r = hue_to_rgb(p, q, h + 1/3)
+    g = hue_to_rgb(p, q, h)
+    b = hue_to_rgb(p, q, h - 1/3)
+
+    return (r, g, b)
+
+def snr_to_color(val, count):
+    """
+    Convert SNR value and station count to color.
+    """
+    if pd.isna(val) or val == ' ':
+        return 'background-color: #ffffff; padding: 1px 2px;'
+    
+    try:
+        val = float(val)
+        # Base color selection based on SNR
+        if val >= 0:
+            hue = 120  # green
+        elif val >= -10:
+            hue = 90   # yellow-green
+        elif val >= -15:
+            hue = 200  # blue
+        else:
+            hue = 220  # dark blue
+            
+        # Get intensity based on station count
+        intensity = get_intensity(count)
         
+        # Convert HSL to RGB
+        sat = 0.8  # 80% saturation
+        lightness = intensity * 0.6  # Scale lightness to 0-60%
+        
+        rgb_color = hsl_to_rgb(hue/360, sat, lightness)
+        hex_color = '#{:02x}{:02x}{:02x}'.format(*[int(x * 255) for x in rgb_color])
+        
+        return f'background-color: {hex_color}; padding: 1px 2px; font-size: 0.85rem;'
+    except ValueError:
+        return 'background-color: #ffffff; padding: 1px 2px;'
+
 def combine_snr_count(mean_table_row, count_table, band, df, row_index):
     """
-    Combines SNR and count data with proper empty value handling and a grid layout for station lists.
+    Combines SNR and count data with proper empty value handling.
     """
     try:
         zone = mean_table_row['zone']
         
-        # Handle SNR value
+        # Handle SNR value - convert to float or None
         snr = mean_table_row[band] if band in mean_table_row else None
         if isinstance(snr, str) and snr.strip() == '':
             snr = None
@@ -267,7 +314,7 @@ def combine_snr_count(mean_table_row, count_table, band, df, row_index):
             except (ValueError, TypeError):
                 snr = None
         
-        # Handle count value
+        # Handle count value - convert to int or 0
         count = count_table.at[row_index, band] if band in count_table.columns else 0
         if pd.isna(count) or (isinstance(count, str) and count.strip() == ''):
             count = 0
@@ -310,7 +357,6 @@ def combine_snr_count(mean_table_row, count_table, band, df, row_index):
             
             tooltip_id = f"tooltip_{row_index}_{band}"
             
-            # Create grid layout of stations
             tooltip_content_html = '<div class="station-list">'
             for station in unique_stations:
                 tooltip_content_html += f'<div>{html.escape(station)}</div>'
@@ -325,28 +371,6 @@ def combine_snr_count(mean_table_row, count_table, band, df, row_index):
     except Exception as e:
         print(f"Error processing zone {zone if 'zone' in locals() else 'unknown'} and band {band}: {str(e)}")
         return "", None
-    
-def create_custom_colormap():
-    # Define the colors and positions according to the percentage mapping
-    colors = [
-        (0.00, "#ffffff"),  # 0%
-        (0.10, "#bff0ff"),  # 10% 
-        (0.20, "#6ed6fd"),  # 20% 
-        (0.30, "#02bfff"),  # 30% 
-        (0.40, "#009aff"),  # 40% 
-        (0.50, "#1ebe3e"),  # 50% 
-        (0.60, "#bfff02"),  # 60% 
-        (0.70, "#fdff00"),  # 70% 
-        (0.80, "#ffcd2e"),  # 80%
-        (0.90, "#ff7603"),  # 90% 
-        (1.00, "#ff0002"),  # 100%
-    ]
-
-    positions = [pos for pos, color in colors]
-    color_codes = [color for pos, color in colors]
-
-    cmap = LinearSegmentedColormap.from_list("custom_cmap", list(zip(positions, color_codes)))
-    return cmap
 
 def generate_empty_cell_style(total_zones=40):
     """Generate CSS for empty cells for all zones"""
@@ -430,7 +454,6 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
                 background-color: rgba(0, 0, 0, 0.05);
             }}
                
-
             .tippy-box[data-theme~='zone'] {{
                 background-color: #333;
                 color: white;
@@ -472,6 +495,7 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
                 white-space: nowrap;
                 overflow: hidden;
                 text-overflow: ellipsis;
+            }}
     
             .tooltip_templates {{
                 display: none;
@@ -487,17 +511,42 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
                 font-size: 0.7rem;
                 color: #666;
             }}
+
+            .legend {{
+                position: fixed;
+                bottom: 20px;
+                left: 20px;
+                right: 20px;
+                background: rgba(255, 255, 255, 0.95);
+                padding: 15px;
+                border-radius: 8px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                z-index: 1000;
+                text-align: center;
+            }}
         </style>
         <link rel="stylesheet" href="https://unpkg.com/tippy.js@6/animations/scale.css">
     </head>
     <body>
         {snr_table_html}
         {tooltip_content_html}
+        <div class="legend">
+            <div style="display: flex; justify-content: space-around; flex-wrap: wrap; margin-bottom: 10px;">
+                <div style="display: flex; align-items: center;">
+                    <span style="font-size: 14pt; margin-right: 20px;">SNR Trend:</span>
+                    <span style="font-size: 16pt; margin: 0 10px;">⇑</span><span>Strong Increase</span>
+                    <span style="font-size: 16pt; margin: 0 10px;">⇗</span><span>Slight Increase</span>
+                    <span style="font-size: 16pt; margin: 0 10px;">⇔</span><span>Stable</span>
+                    <span style="font-size: 16pt; margin: 0 10px;">⇘</span><span>Slight Decrease</span>
+                    <span style="font-size: 16pt; margin: 0 10px;">⇓</span><span>Strong Decrease</span>
+                </div>
+            </div>
+            <small>Make your own SNR overview: <a href="https://github.com/s53zo/Hamradio_copilot">https://github.com/s53zo/Hamradio_copilot</a></small>
+        </div>
         <script src="https://unpkg.com/@popperjs/core@2/dist/umd/popper.min.js"></script>
         <script src="https://unpkg.com/tippy.js@6/dist/tippy-bundle.umd.min.js"></script>
         <script>
             document.addEventListener('DOMContentLoaded', function() {{
-                // Initialize tooltips for station lists
                 tippy('.tooltip', {{
                     content(reference) {{
                         const id = reference.getAttribute('data-tooltip-content');
@@ -511,26 +560,17 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
                     placement: 'top',
                     theme: 'light',
                 }});
-
-                // Initialize tooltips for zone numbers
-                tippy('.zone-tooltip', {{
-                    theme: 'zone',
-                    placement: 'right',
-                    animation: 'scale',
-                    arrow: true,
-                    delay: [10, 0],
-                }});
             }});
         </script>
     </body>
     </html>
     """
     return template
-  
+
 def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False):
     # Connect to the SQLite database
     conn = sqlite3.connect('callsigns.db')
-    
+  
     # Read data from the SQLite table `callsigns` into a pandas DataFrame
     query = """
     SELECT zone, band, CAST(snr AS FLOAT) as snr, timestamp, spotter, spotted_station
@@ -544,7 +584,7 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
             dtype={
                 'zone': 'Int64',
                 'band': 'str',
-                'snr': 'float',  # Explicitly set SNR as float
+                'snr': 'float',
                 'spotter': 'str',
                 'spotted_station': 'str'
             }
@@ -562,7 +602,7 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
         print("Initial DataFrame:")
         print(df.head())
 
-    df = delete_old(df, span)  # Ignore any data older than the specified range from the database.
+    df = delete_old(df, span)
 
     if debug:
         print(f"DataFrame after deleting entries older than {span} hours:")
@@ -574,21 +614,22 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
     df['zone'] = df['zone'].cat.set_categories(range(1, 41))
 
     # Set 'band' as a categorical variable with desired order
-    df['band'] = df['band'].astype(str)  # Convert 'band' to string if necessary
+    df['band'] = df['band'].astype(str)
     df['band'] = df['band'].astype('category')
     df['band'] = df['band'].cat.set_categories(band_order)
 
     all_zones = pd.Index(range(1, 41), name='zone')
 
-    # Ensure both tables have all zones
+    # Create count table
     count_table = df.groupby(['zone', 'band'], observed=True).agg(
         count=('spotter', lambda x: len(set(zip(x, df.loc[x.index, 'spotted_station']))))
     ).reset_index().pivot(
         index='zone',
         columns='band',
         values='count'
-    ).reindex(all_zones, fill_value=0)  # Reindex with all zones
+    ).reindex(all_zones, fill_value=0)
 
+    # Create mean table
     mean_table = df.pivot_table(
         values='snr',
         index='zone',
@@ -596,7 +637,7 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
         aggfunc='median',
         observed=True,
         dropna=False
-    ).reindex(all_zones)  # Reindex with all zones
+    ).reindex(all_zones)
 
     # Convert numeric columns to float
     numeric_columns = mean_table.select_dtypes(include=['number']).columns
@@ -620,92 +661,60 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
     now = dt.datetime.now(dt.timezone.utc).strftime("%b %d, %Y %H:%M")
     caption_string = f"Last {int(span*60)} minutes SNR of spots in S5 and around - refresh at {now} GMT"
 
-    # Compute snr_min and snr_max using 10th and 90th percentiles
-    if not df['snr'].empty:
-        snr_min = df['snr'].quantile(0.1)
-        snr_max = df['snr'].quantile(0.9)
-    else:
-        snr_min = -20  # Default values if 'snr' is empty
-        snr_max = 0
-
-    if snr_min == snr_max:
-        snr_min -= 10  # Adjust to avoid division by zero
-        snr_max += 10
-
-    # Create custom colormap
-    custom_cmap = create_custom_colormap()
-
-    # Define the function to map SNR values to colors
-    def snr_to_color(val):
-        if pd.isna(val) or val == ' ':
-            return 'background-color: #ffffff; padding: 1px 2px;'  # Added padding
-        else:
-            try:
-                val = float(val)
-            except ValueError:
-                return 'background-color: #ffffff; padding: 1px 2px;'
-            val_clipped = max(min(val, snr_max), snr_min)
-            norm_val = (val_clipped - snr_min) / (snr_max - snr_min)
-            rgba_color = custom_cmap(norm_val)
-            rgb_color = tuple(int(255 * x) for x in rgba_color[:3])
-            hex_color = '#%02x%02x%02x' % rgb_color
-            # Added padding and font-size to the background-color style
-            return f'background-color: {hex_color}; padding: 1px 2px; font-size: 0.85rem;'
-
-    # Apply color map to mean_table (excluding 'zone' and 'zone_display' columns)
-    means_no_zone = mean_table.drop(columns=['zone', 'zone_display'], errors='ignore')
-
-    # Convert all values to float
-    means_no_zone = means_no_zone.apply(pd.to_numeric, errors='coerce')
-
-    color_table1 = means_no_zone.map(snr_to_color)
-
     # Combine mean_table and count_table into a single table with desired cell content
     combined_table = mean_table.copy()
     
     # Tooltip content list
     tooltip_contents = []
 
-    # Iterate over each band
+    # Apply colors and combine data
+    color_table = pd.DataFrame(index=mean_table.index, columns=mean_table.columns)
     for band in band_order:
         if band in mean_table.columns:
             combined_results = []
             for idx, row in mean_table.iterrows():
+                # Get SNR value and count
+                snr = row[band] if band in row else None
+                count = count_table.at[idx, band] if band in count_table.columns else 0
+                
+                # Set color based on both SNR and count
+                if not pd.isna(snr) and count > 0:
+                    color_table.at[idx, band] = snr_to_color(snr, count)
+                
+                # Combine SNR and count display
                 result = combine_snr_count(row, count_table, band, df, idx)
                 combined_results.append(result)
             
             combined_table[band] = [result[0] for result in combined_results]
-            # Collect tooltip contents
             tooltip_contents.extend([content for _, content in combined_results if content])
         else:
             combined_table[band] = ' '
 
-    # Handle 'zone' column separately (keep as is)
+    # Handle 'zone' column separately
     if 'zone' in combined_table.columns and 'zone' in mean_table.columns:
         combined_table['zone'] = mean_table['zone']
         combined_table['zone_display'] = mean_table['zone_display']
 
     # Ensure the columns are ordered as per band_order
     combined_table = combined_table[['zone_display'] + band_order]
-    # Rename 'zone_display' to 'zone' for display
     combined_table = combined_table.rename(columns={'zone_display': 'zone'})
 
     # Apply the styles to the combined table
-    styled_table1 = combined_table.style.apply(lambda x: color_table1, axis=None).set_caption(caption_string)
+    styled_table = combined_table.style.apply(lambda x: color_table, axis=None).set_caption(caption_string)
 
-    styled_table1.set_properties(subset=['zone'], **{'font-weight': 'bold'})
-    styled_table1.set_properties(**{'text-align': 'center'})
+    styled_table.set_properties(subset=['zone'], **{'font-weight': 'bold'})
+    styled_table.set_properties(**{'text-align': 'center'})
 
-    # Set table styles to different parts of the table
-    styled_table1.set_table_styles([
+    # Set table styles
+    styled_table.set_table_styles([
         {'selector': 'caption', 'props': [
-            ('font-size', '0.85rem'),  # Reduced from 13pt
+            ('font-size', '0.85rem'),
             ('font-weight', 'bold'),
             ('padding', '2px')
         ]},
         {'selector': 'th', 'props': [
-            ('font-size', '0.85rem'),  # Reduced from 12pt
-            ('padding', '2px'),        # Reduced from 4px
+            ('font-size', '0.85rem'),
+            ('padding', '2px'),
             ('position', 'sticky'),
             ('top', '0'),
             ('background-color', 'rgba(255, 255, 255, 0.95)'),
@@ -714,30 +723,25 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
             ('white-space', 'nowrap')
         ]},
         {'selector': 'td', 'props': [
-            ('padding', '1px 2px'),    # Reduced padding
-            ('font-size', '0.85rem'),  # Consistent font size
+            ('padding', '1px 2px'),
+            ('font-size', '0.85rem'),
             ('white-space', 'nowrap')
         ]},
         {'selector': 'td:first-child', 'props': [
             ('font-weight', 'bold'),
-            ('width', '35px'),         # Reduced from 45px
+            ('width', '35px'),
             ('min-width', '35px')
         ]}
     ])
 
-    # Convert the styled table to HTML
-    html1 = styled_table1.hide(axis="index").to_html()
-
-    # Update the table style
-    html1 = html1.replace(
+    # Convert to HTML
+    html_table = styled_table.hide(axis="index").to_html()
+    html_table = html_table.replace(
         '<table ',
         '<table style="width: 100%; max-width: 800px; margin: 0 auto; table-layout: fixed;" '
     )
-    if debug:
-        print("Generated HTML Table:")
-        print(html1[:500])  # Print the first 500 characters of the HTML
 
-    # Build the tooltip content HTML
+    # Build tooltip content HTML
     tooltip_content_html = ''
     for tooltip_id, content_html in tooltip_contents:
         tooltip_content_html += f'''
@@ -748,299 +752,16 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
         </div>
         '''
 
-    # Include Tooltip.js from CDN
-    tooltip_js_cdn = "https://unpkg.com/@popperjs/core@2/dist/umd/popper.min.js"
-    tooltip_js_library = "https://unpkg.com/tippy.js@6/dist/tippy-bundle.umd.min.js"
-    tooltip_css_cdn = "https://unpkg.com/tippy.js@6/animations/scale.css"
+    # Generate final HTML
+    final_html = generate_html_template(html_table, tooltip_content_html, caption_string)
 
-    # Prepare solar data if included
-    if include_solar_data:
-        # Fetch solar widget XML data.
-        try:
-            solar_response = requests.get("https://www.hamqsl.com/solarxml.php")
-            xml_data = solar_response.content
-            root = ET.fromstring(xml_data)
-        except Exception as e:
-            print(f"Error fetching solar data: {e}")
-            solar_table_html = ""
-        else:
-            # Extract solar and band condition data
-            solar_data = {
-                "SFI": root.findtext("solardata/solarflux"),
-                "Sunspots": root.findtext("solardata/sunspots"),
-                "A-Index": root.findtext("solardata/aindex"),
-                "K-Index": root.findtext("solardata/kindex"),
-                "X-Ray": root.findtext("solardata/xray"),
-                "Signal_Noise": root.findtext("solardata/signalnoise"),
-                "Aurora": root.findtext("solardata/aurora"),
-                "Lat.": root.findtext("solardata/latdegree"),
-            }
-
-            conditions = {
-                "80m-40m": {"Day": "", "Night": ""},
-                "30m-20m": {"Day": "", "Night": ""},
-                "17m-15m": {"Day": "", "Night": ""},
-                "12m-10m": {"Day": "", "Night": ""},
-            }
-
-            for band in root.findall("solardata/calculatedconditions/band"):
-                band_name = band.get("name")
-                time_of_day = band.get("time")
-                condition = band.text
-                if band_name in conditions:
-                    conditions[band_name][time_of_day.capitalize()] = condition
-
-            # HTML content for solar data and band conditions
-            solar_table_html = f"""
-            <div style="width: 100%; text-align: center; font-weight: bold; margin-bottom: 5px;">Solar Data by N0NBH</div>
-            <hr>
-            <div style="display: flex; justify-content: center; margin-bottom: 5px;">
-                <div style="margin-right: 20px;">
-                    <span style="font-weight: bold;">SFI:</span> <span style="font-weight: bold;">{solar_data['SFI']}</span>
-                </div>
-                <div>
-                    <span style="font-weight: bold;">SSN:</span> <span style="font-weight: bold;">{solar_data['Sunspots']}</span>
-                </div>
-            </div>
-            <div style="display: inline-flex; justify-content: center; align-items: center; width: 100%; text-align: center; white-space: nowrap;">
-                <div style="margin-right: 10px;">
-                    <span style="font-weight: bold;">A:</span> <span style="font-weight: bold;">{solar_data['A-Index']}</span>
-                </div>
-                <div style="margin-right: 10px;">
-                    <span style="font-weight: bold;">K:</span> <span style="font-weight: bold;">{solar_data['K-Index']}</span>
-                </div>
-                <div>
-                    <span style="font-weight: bold;">X:</span> <span style="font-weight: bold;">{solar_data['X-Ray']}</span>
-                </div>
-            </div>
-
-            <div style="display: flex; justify-content: center; align-items: center; white-space: nowrap;">
-                <div style="margin-right: 20px;">
-                    <span style="font-weight: bold;">Aurora:</span> <span style="font-weight: bold;">{solar_data['Aurora']}</span>
-                </div>
-                <div>
-                    <span style="font-weight: bold;">Lat.:</span> <span style="font-weight: bold;">{solar_data['Lat.']}</span>
-                </div>
-            </div>
-
-            <hr>
-            <div style="width: 100%; text-align: center; font-weight: bold; margin-top: 10px;">Band Conditions</div>
-            <table style="width: 60%; margin: 0 auto; border-collapse: collapse;">
-                <thead>
-                    <tr>
-                        <th style="padding: 5px; text-align: center; font-weight: bold;">Band</th>
-                        <th style="padding: 5px; text-align: center; font-weight: bold;">Day</th>
-                        <th style="padding: 5px; text-align: center; font-weight: bold;">Night</th>
-                    </tr>
-                </thead>
-                <tbody>
-            """
-
-            # Add the conditions for each band with color coding.
-            for band, condition in conditions.items():
-                day_condition = condition.get("Day", "N/A")
-                night_condition = condition.get("Night", "N/A")
-                if day_condition == "Good":
-                    day_color = "green"
-                elif day_condition == "Fair":
-                    day_color = "orange"
-                else:
-                    day_color = "red"
-                if night_condition == "Good":
-                    night_color = "green"
-                elif night_condition == "Fair":
-                    night_color = "orange"
-                else:
-                    night_color = "red"
-
-                solar_table_html += f"""
-                <tr>
-                    <td style="padding: 5px; text-align: center; font-weight: bold; white-space: nowrap;">{band}</td>
-                    <td style="padding: 5px; text-align: center; font-weight: bold; color: {day_color}; white-space: nowrap;">{day_condition}</td>
-                    <td style="padding: 5px; text-align: center; font-weight: bold; color: {night_color}; white-space: nowrap;">{night_condition}</td>
-                </tr>
-                """
-
-            solar_table_html += """
-                </tbody>
-            </table>
-            <div style="margin-top: 5px; text-align: center">
-                <span style="font-weight: bold;">Signal Noise:</span> <span style="font-weight: bold;">{Signal_Noise}</span>
-            </div>
-            """
-
-            # Formatting the placeholders directly in `solar_table_html`
-            solar_table_html = solar_table_html.format(
-                SFI=solar_data['SFI'],
-                Sunspots=solar_data['Sunspots'],
-                A_Index=solar_data['A-Index'],
-                K_Index=solar_data['K-Index'],
-                X_Ray=solar_data['X-Ray'],
-                Signal_Noise=solar_data['Signal_Noise'],
-                Aurora=solar_data['Aurora'],
-                Lat=solar_data['Lat.']
-            )
-
-            # Wrap the table in a fixed div.
-            solar_table_html = f"""
-            <div style="position: fixed; left: 5%; padding-top: 0.75%; padding: 10px; z-index: 1000; font-family: 'Roboto', monospace;">
-                {solar_table_html}
-            </div>
-            """
-    else:
-        solar_table_html = ""
-
-    # Legend HTML block
-    legend_html = f"""
-    <div style="
-        position: fixed; 
-        bottom: 20px; 
-        left: 50%; 
-        transform: translateX(-50%); 
-        width: 80%; 
-        background-color: rgba(255, 255, 255, 0.95); 
-        font-weight: bold; 
-        padding: 15px; 
-        border: 1px solid #ccc; 
-        border-radius: 8px; 
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1); 
-        z-index: 1000;
-    ">
-        <div style="display: flex; justify-content: space-around; flex-wrap: wrap;">
-            <!-- SNR Levels Section -->
-            <div style="display: flex; align-items: center; margin-bottom: 10px;">
-                <div style="font-size: 14pt; margin-right: 20px;">SNR Levels:</div>
-                
-                <div style="display: flex; align-items: center; margin-right: 15px;">
-                    <div style="width: 20px; height: 20px; background-color: #a3cce9; margin-right: 5px;"></div>
-                    <span style="font-size: 12pt;">Very Weak (≤ -15 dB)</span>
-                </div>
-                
-                <div style="display: flex; align-items: center; margin-right: 15px;">
-                    <div style="width: 20px; height: 20px; background-color: #b6e3b5; margin-right: 5px;"></div>
-                    <span style="font-size: 12pt;">Weak (-15 to -10 dB)</span>
-                </div>
-                
-                <div style="display: flex; align-items: center; margin-right: 15px;">
-                    <div style="width: 20px; height: 20px; background-color: #f7c896; margin-right: 5px;"></div>
-                    <span style="font-size: 12pt;">Moderate (-10 to -3 dB)</span>
-                </div>
-                
-                <div style="display: flex; align-items: center;">
-                    <div style="width: 20px; height: 20px; background-color: #e57373; margin-right: 5px;"></div>
-                    <span style="font-size: 12pt;">Strong (≥ -3 dB)</span>
-                </div>
-            </div>
-            <!-- Slope Symbols Section -->
-            <div style="display: flex; align-items: center; margin-bottom: 10px;">
-                <div style="font-size: 14pt; margin-right: 20px;">SNR Trend:</div>
-                
-                <div style="display: flex; align-items: center; margin-right: 15px;">
-                    <span style="font-size: 16pt;">⇑</span>
-                    <span style="font-size: 12pt; margin-left: 5px;">Strong Increase</span>
-                </div>
-                
-                <div style="display: flex; align-items: center; margin-right: 15px;">
-                    <span style="font-size: 16pt;">⇗</span>
-                    <span style="font-size: 12pt; margin-left: 5px;">Slight Increase</span>
-                </div>
-                
-                <div style="display: flex; align-items: center; margin-right: 15px;">
-                    <span style="font-size: 16pt;">⇔</span>
-                    <span style="font-size: 12pt; margin-left: 5px;">Stable</span>
-                </div>
-                
-                <div style="display: flex; align-items: center; margin-right: 15px;">
-                    <span style="font-size: 16pt;">⇘</span>
-                    <span style="font-size: 12pt; margin-left: 5px;">Slight Decrease</span>
-                </div>
-                
-                <div style="display: flex; align-items: center;">
-                    <span style="font-size: 16pt;">⇓</span>
-                    <span style="font-size: 12pt; margin-left: 5px;">Strong Decrease</span>
-                </div>
-           </div>
-        </div>
-    <small><center>Make your own SNR overview: <a href="https://github.com/s53zo/Hamradio_copilot">https://github.com/s53zo/Hamradio_copilot</a></center></small></div>
-    """
-
-    # Adjust the left padding depending on whether solar data is included
-    left_padding = "120px" if include_solar_data else "20px"
-
-    # Simplified CSS styles for the tooltip
-    final_html = f"""
-    <html>
-    <head>
-        <meta charset="UTF-8">
-        <meta http-equiv="refresh" content="{int(frequency * 60)}">
-        <style>
-            body {{
-                margin: 0;
-                padding: 0;
-                overflow-y: hidden; /* Prevent vertical scrolling */
-            }}
-            html {{
-                height: 100%;
-            }}
-            .tooltip {{
-                cursor: pointer;
-            }}
-            .tippy-content {{
-                font-size: 12pt;
-            }}
-            /* Hide the tooltip content divs */
-            .tooltip_templates {{
-                display: none;
-            }}
-        </style>
-        <!-- Include Tooltip.js CSS -->
-        <link rel="stylesheet" href="{tooltip_css_cdn}">
-    </head>
-    <body>
-        <div style="display: flex; width: 100%; height: 100%;">
-            {solar_table_html}
-            <div style="position: relative; flex-grow: 1; padding-left: {left_padding}; overflow-y: auto; font-family: 'Roboto', monospace;">
-                <div style="max-height: 80vh; overflow-y: auto; padding-top: 0.75%; padding-bottom: 10%;">
-                    {html1}
-                    <!-- Tooltip content is included here and will be hidden -->
-                    {tooltip_content_html}
-                </div>
-                
-            </div>
-        </div>
-        <!-- Include Tooltip.js JS -->
-        <script src="{tooltip_js_cdn}"></script>
-        <script src="{tooltip_js_library}"></script>
-        <script>
-            document.addEventListener('DOMContentLoaded', function() {{
-                tippy('.tooltip', {{
-                    content(reference) {{
-                        const id = reference.getAttribute('data-tooltip-content');
-                        const template = document.querySelector(id);
-                        return template.innerHTML;
-                    }},
-                    allowHTML: true,
-                    maxWidth: 'none',
-                    interactive: true,
-                    animation: 'scale',
-                    placement: 'top',
-                    theme: 'light',
-                }});
-            }});
-        </script>
-    </body>
-    </html>
-    """
-    
-    # <div>{legend_html}</div>
-    # Minify the final_html before writing it to the file
+    # Minify the HTML
     minified_html = htmlmin.minify(final_html, remove_empty_space=True, remove_comments=True)
 
-    # Write the minified HTML to index.html
-    with open("index.html", "w", encoding="utf-8") as text_file:  # Write minified HTML data to index.html file.
+    # Save files
+    with open("index.html", "w", encoding="utf-8") as text_file:
         text_file.write(minified_html)
 
-    # Save a copy to the specified local folder
     os.makedirs(output_folder, exist_ok=True)
     local_file_path = os.path.join(output_folder, "index.html")
     with open(local_file_path, "w", encoding="utf-8") as local_file:
@@ -1053,7 +774,7 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
             access_key = input("Enter your AWS Access Key ID: ")
             secret_key = input("Enter your AWS Secret Access Key: ")
             s3_buck = input("Enter the name of the S3 Bucket you'd like to write to: ")
-        upload_file_to_s3("index.html", s3_buck, access_key, secret_key)  # Upload index.html to S3 bucket
+        upload_file_to_s3("index.html", s3_buck, access_key, secret_key)
 
 if __name__ == '__main__':
     time_to_wait = frequency * 60  # Time to wait in between re-running program
@@ -1071,4 +792,3 @@ if __name__ == '__main__':
     while True:
         run(aws_access_key, secret_access_key, s3_bucket, include_solar_data)
         time.sleep(time_to_wait)
-        
