@@ -491,7 +491,8 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
                 min-width: 600px;
                 gap: 4px;
                 padding: 8px;
-                background: dark blue;
+                background: #f0f0f0;
+                color: #333333;
             }}
 
             .station-list div {{
