@@ -115,7 +115,8 @@ debug = args.debug
 include_solar_data = args.include_solar_data
 
 #band_order = ['160', '80', '40', '30', '20', '17', '15', '12', '10', '6']
-band_order = ['160', '80', '40', '20', '15', '10']
+#band_order = ['160', '80', '40', '20', '15', '10']
+band_order = ['160', '80', '40', '20', '15', '10', 'Scale', 'Propagation']
 
 # Mapping zone numbers to descriptions...
 zone_name_map = {
@@ -258,6 +259,35 @@ def snr_to_color(val, count, zone):
     except ValueError:
         return 'background-color: #ffffff; padding: 1px 2px;'
 
+def get_color_scale(row_index, total_rows=40):
+    """
+    Generate a color for the spectrum column based on row position
+    """
+    # Create a gradient from red (poor) to green (excellent)
+    hue = (row_index / total_rows) * 120  # 0 to 120 (red to green)
+    rgb_color = hsl_to_rgb(hue/360, 0.9, 0.5)
+    hex_color = '#{:02x}{:02x}{:02x}'.format(*[int(x * 255) for x in rgb_color])
+    return f'background-color: {hex_color}; padding: 1px 2px;'
+
+def get_propagation_description(path_adjusted_snr):
+    """
+    Return a two-word description of propagation based on path-adjusted SNR
+    """
+    if pd.isna(path_adjusted_snr):
+        return "No Data"
+    elif path_adjusted_snr >= 5:
+        return "Exceptional Propagation"
+    elif path_adjusted_snr >= 0:
+        return "Very Good"
+    elif path_adjusted_snr >= -5:
+        return "Good Propagation"
+    elif path_adjusted_snr >= -10:
+        return "Fair Propagation"
+    elif path_adjusted_snr >= -15:
+        return "Poor Propagation"
+    else:
+        return "Very Poor"
+        
 def get_aws_credentials():
     access_key = input("Enter your AWS Access Key ID: ")
     secret_key = input("Enter your AWS Secret Access Key: ")
@@ -757,6 +787,23 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
     # Tooltip content list
     tooltip_contents = []
 
+
+    # In the table generation part where you create color_styles:
+    color_styles['Scale'] = [get_color_scale(i) for i in range(len(mean_table))]
+    
+    # Add propagation description column (no special styling)
+    for idx, row in mean_table.iterrows():
+        path_adjusted_snr = None
+        # Try to get the best SNR from any band
+        for band in ['10', '15', '20', '40', '80', '160']:
+            if band in row and not pd.isna(row[band]):
+                snr = float(row[band])
+                expected_attenuation = calculate_expected_attenuation(row['zone'])
+                path_adjusted_snr = snr + expected_attenuation
+                break
+        
+        combined_table.at[idx, 'Propagation'] = get_propagation_description(path_adjusted_snr)
+        
     # Create color mapping for each cell
     color_styles = pd.DataFrame('', index=mean_table.index, columns=band_order)
     
