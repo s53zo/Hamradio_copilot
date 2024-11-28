@@ -211,53 +211,60 @@ def hsl_to_rgb(h, s, l):
 
     return (r, g, b)
 
-def snr_to_color(val, count, zone):
+def snr_to_color(val, count):
     """
-    Convert SNR value and station count to color, accounting for expected path loss
+    Convert SNR value and station count to color.
+    Uses a new color scheme with better visual separation between signal levels.
     """
     if pd.isna(val) or val == ' ':
         return 'background-color: #ffffff; padding: 1px 2px;'
     
     try:
         val = float(val)
-        expected_attenuation = calculate_expected_attenuation(zone)
         
-        # Adjust the SNR value by adding back the expected path loss
-        path_adjusted_snr = val + expected_attenuation
-        
-        # Color selection based on path-adjusted SNR
-        # More distinct ranges for better visualization
-        if path_adjusted_snr >= 5:
-            hue = 120  # Pure green - exceptional propagation for the distance
-        elif path_adjusted_snr >= 0:
-            hue = 90   # Yellow-green - very good for the distance
-        elif path_adjusted_snr >= -5:
-            hue = 60   # Yellow - good for the distance
-        elif path_adjusted_snr >= -10:
-            hue = 200  # Light blue - fair for the distance
-        elif path_adjusted_snr >= -15:
-            hue = 220  # Dark blue - poor for the distance
-        else:
-            hue = 240  # Purple - very poor even considering distance
-        
-        # Adjust intensity based on count but with less impact
+        # Get intensity based on station count with a more subtle effect
         intensity = get_intensity(count)
         
-        # Modify saturation and lightness for better distinction
-        sat = 0.9  # Higher saturation for more vivid colors
+        # Base color selection based on SNR with new color ranges
+        if val >= 0:
+            hue = 35   # orange (#ff9800)
+        elif val >= -5:
+            hue = 60   # yellow (#ffeb3b)
+        elif val >= -10:
+            hue = 120  # green (#4caf50)
+        elif val >= -15:
+            hue = 195  # light blue (#81d4fa)
+        elif val >= -20:
+            hue = 210  # blue (#2196f3)
+        else:
+            hue = 240  # deep purple (#1a237e)
+                
+        # Adjust saturation and lightness for better visualization
+        sat = 0.85  # Slightly reduced from 0.9 for better color balance
         
         # Adjust lightness range to make colors more distinct
-        min_lightness = 0.3  # Brighter minimum
-        max_lightness = 0.8  # Darker maximum
+        min_lightness = 0.25  # Darker minimum for better contrast
+        max_lightness = 0.65  # Reduced maximum to maintain color saturation
         lightness = min_lightness + intensity * (max_lightness - min_lightness)
         
-        # Convert to RGB and hex
+        # Convert HSL to RGB and hex
         rgb_color = hsl_to_rgb(hue/360, sat, lightness)
         hex_color = '#{:02x}{:02x}{:02x}'.format(*[int(x * 255) for x in rgb_color])
         
         return f'background-color: {hex_color}; padding: 1px 2px; font-size: 0.85rem;'
     except ValueError:
         return 'background-color: #ffffff; padding: 1px 2px;'
+
+# Helper function to calculate color intensity based on station count
+def get_intensity(count, max_count=1000):
+    """
+    Calculate color intensity using exponential scaling with a more subtle effect.
+    """
+    min_intensity = 0.3   # Increased minimum intensity for better visibility
+    max_additional = 0.7  # Reduced range for more subtle variations
+    a = 3.0 / max_count  # Adjusted scaling factor
+    intensity = min_intensity + max_additional * (1 - np.exp(-a * count))
+    return intensity
 
 def get_color_scale(row_index, total_rows=40):
     """
