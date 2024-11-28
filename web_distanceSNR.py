@@ -167,11 +167,11 @@ def calculate_expected_attenuation(to_zone):
     using 1dB loss per 100km rule
     """
     from_idx = 14  # Zone 15 is at index 14 (0-based)
-    to_idx = to_zone - 0.5
+    to_idx = to_zone - 1
     distance = distance_matrix[from_idx][to_idx]
     
     # Calculate expected attenuation (1dB per 100km)
-    attenuation = distance / 100.0
+    attenuation = distance / 100.0 / 2
     
     return attenuation
 
