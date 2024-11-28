@@ -225,22 +225,29 @@ def snr_to_color(val, count, zone):
         path_adjusted_snr = val + expected_attenuation
         
         # Color selection based on path-adjusted SNR
-        if path_adjusted_snr >= 0:
-            hue = 120  # green (excellent signal considering distance)
+        # More distinct ranges for better visualization
+        if path_adjusted_snr >= 5:
+            hue = 120  # Pure green - exceptional propagation for the distance
+        elif path_adjusted_snr >= 0:
+            hue = 90   # Yellow-green - very good for the distance
+        elif path_adjusted_snr >= -5:
+            hue = 60   # Yellow - good for the distance
         elif path_adjusted_snr >= -10:
-            hue = 90   # yellow-green (good signal for the distance)
+            hue = 200  # Light blue - fair for the distance
         elif path_adjusted_snr >= -15:
-            hue = 200  # blue (fair signal for the distance)
+            hue = 220  # Dark blue - poor for the distance
         else:
-            hue = 220  # dark blue (poor signal even accounting for distance)
+            hue = 240  # Purple - very poor even considering distance
         
-        # Standard intensity calculation based on count
+        # Adjust intensity based on count but with less impact
         intensity = get_intensity(count)
         
-        # Standard color parameters
-        sat = 0.8
-        min_lightness = 0.3
-        max_lightness = 0.7
+        # Modify saturation and lightness for better distinction
+        sat = 0.9  # Higher saturation for more vivid colors
+        
+        # Adjust lightness range to make colors more distinct
+        min_lightness = 0.4  # Brighter minimum
+        max_lightness = 0.6  # Darker maximum
         lightness = min_lightness + intensity * (max_lightness - min_lightness)
         
         # Convert to RGB and hex
