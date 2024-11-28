@@ -788,43 +788,26 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
     tooltip_contents = []
 
 
-    # In the table generation part where you create color_styles:
+    # First, create color_styles DataFrame and add Scale column
+    color_styles = pd.DataFrame('', index=mean_table.index, columns=band_order)
     color_styles['Scale'] = [get_color_scale(i) for i in range(len(mean_table))]
     
-    # Add propagation description column (no special styling)
-    for idx, row in mean_table.iterrows():
-        path_adjusted_snr = None
-        # Try to get the best SNR from any band
-        for band in ['10', '15', '20', '40', '80', '160']:
-            if band in row and not pd.isna(row[band]):
-                snr = float(row[band])
-                expected_attenuation = calculate_expected_attenuation(row['zone'])
-                path_adjusted_snr = snr + expected_attenuation
-                break
-        
-        combined_table.at[idx, 'Propagation'] = get_propagation_description(path_adjusted_snr)
-        
-    # Create color mapping for each cell
-    color_styles = pd.DataFrame('', index=mean_table.index, columns=band_order)
-    
-    # Iterate through bands and create combined display and colors
-    for band in band_order:
+    # Then, iterate through bands
+    for band in band_order[:6]:  # Only process actual bands, not Scale and Propagation
         if band in mean_table.columns:
             combined_results = []
             for idx, row in mean_table.iterrows():
-                # Get SNR value and count
                 snr = row[band] if band in row else None
                 count = count_table.at[idx, band] if band in count_table.columns else 0
-                zone = row['zone']  # Get the zone number
+                zone = row['zone']
                 
                 try:
                     count = int(count) if count != '' else 0
                     if not pd.isna(snr) and count > 0:
-                        color_styles.at[idx, band] = snr_to_color(snr, count, zone)  # Pass the zone to snr_to_color
+                        color_styles.at[idx, band] = snr_to_color(snr, count, zone)
                 except (ValueError, TypeError):
                     count = 0
                 
-                # Combine SNR and count display
                 result = combine_snr_count(row, count_table, band, df, idx)
                 combined_results.append(result)
             
@@ -832,6 +815,20 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
             tooltip_contents.extend([content for _, content in combined_results if content])
         else:
             combined_table[band] = ' '
+    
+    # Add Scale column to combined_table
+    combined_table['Scale'] = ''  # Empty values, we'll use color_styles for coloring
+    
+    # Add Propagation descriptions
+    for idx, row in mean_table.iterrows():
+        path_adjusted_snr = None
+        for band in ['10', '15', '20', '40', '80', '160']:
+            if band in row and not pd.isna(row[band]):
+                snr = float(row[band])
+                expected_attenuation = calculate_expected_attenuation(row['zone'])
+                path_adjusted_snr = snr + expected_attenuation
+                break
+        combined_table.at[idx, 'Propagation'] = get_propagation_description(path_adjusted_snr)
 
     # Handle 'zone' column separately
     if 'zone' in combined_table.columns and 'zone' in mean_table.columns:
