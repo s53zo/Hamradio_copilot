@@ -216,55 +216,61 @@ def snr_to_color(val, count):
     Convert SNR value and station count to color.
     Uses a new color scheme with better visual separation between signal levels.
     """
-    if pd.isna(val) or val == ' ':
+    if pd.isna(val) or val == ' ' or val == '':
         return 'background-color: #ffffff; padding: 1px 2px;'
     
     try:
+        # Make sure we have a numeric value
         val = float(val)
-        
-        # Get intensity based on station count with a more subtle effect
+        count = int(count) if count != '' else 0
+
+        # Get intensity based on station count
         intensity = get_intensity(count)
         
-        # Base color selection based on SNR with new color ranges
-        if val >= 0:
-            hue = 35   # orange (#ff9800)
-        elif val >= -5:
-            hue = 60   # yellow (#ffeb3b)
-        elif val >= -10:
-            hue = 120  # green (#4caf50)
-        elif val >= -15:
-            hue = 195  # light blue (#81d4fa)
-        elif val >= -20:
-            hue = 210  # blue (#2196f3)
-        else:
-            hue = 240  # deep purple (#1a237e)
-                
-        # Adjust saturation and lightness for better visualization
-        sat = 0.85  # Slightly reduced from 0.9 for better color balance
-        
-        # Adjust lightness range to make colors more distinct
-        min_lightness = 0.25  # Darker minimum for better contrast
-        max_lightness = 0.65  # Reduced maximum to maintain color saturation
+        # Base lightness adjustment based on intensity
+        min_lightness = 0.25
+        max_lightness = 0.65
         lightness = min_lightness + intensity * (max_lightness - min_lightness)
-        
-        # Convert HSL to RGB and hex
-        rgb_color = hsl_to_rgb(hue/360, sat, lightness)
-        hex_color = '#{:02x}{:02x}{:02x}'.format(*[int(x * 255) for x in rgb_color])
-        
+        sat = 0.85
+
+        # Color selection based on SNR value
+        if val >= 0:
+            # Orange range
+            hex_color = f'#{int(255*intensity):02x}{int(152*intensity):02x}{int(0):02x}'
+        elif val >= -5:
+            # Yellow range
+            hex_color = f'#{int(255*intensity):02x}{int(235*intensity):02x}{int(59*intensity):02x}'
+        elif val >= -10:
+            # Green range
+            hex_color = f'#{int(76*intensity):02x}{int(175*intensity):02x}{int(80*intensity):02x}'
+        elif val >= -15:
+            # Light blue range
+            hex_color = f'#{int(129*intensity):02x}{int(212*intensity):02x}{int(250*intensity):02x}'
+        elif val >= -20:
+            # Blue range
+            hex_color = f'#{int(33*intensity):02x}{int(150*intensity):02x}{int(243*intensity):02x}'
+        else:
+            # Deep purple range
+            hex_color = f'#{int(26*intensity):02x}{int(35*intensity):02x}{int(126*intensity):02x}'
+
         return f'background-color: {hex_color}; padding: 1px 2px; font-size: 0.85rem;'
-    except ValueError:
+    except (ValueError, TypeError) as e:
+        print(f"Error in snr_to_color: {e} for val={val}, count={count}")
         return 'background-color: #ffffff; padding: 1px 2px;'
 
-# Helper function to calculate color intensity based on station count
 def get_intensity(count, max_count=1000):
     """
     Calculate color intensity using exponential scaling with a more subtle effect.
     """
-    min_intensity = 0.3   # Increased minimum intensity for better visibility
-    max_additional = 0.7  # Reduced range for more subtle variations
-    a = 3.0 / max_count  # Adjusted scaling factor
-    intensity = min_intensity + max_additional * (1 - np.exp(-a * count))
-    return intensity
+    try:
+        count = int(count)
+        min_intensity = 0.3
+        max_additional = 0.7
+        a = 3.0 / max_count
+        intensity = min_intensity + max_additional * (1 - np.exp(-a * count))
+        return min(max(intensity, 0.3), 1.0)  # Clamp between 0.3 and 1.0
+    except (ValueError, TypeError):
+        return 0.3  # Return minimum intensity if there's an error
 
 def get_color_scale(row_index, total_rows=40):
     """
