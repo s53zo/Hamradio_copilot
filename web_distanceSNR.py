@@ -751,7 +751,7 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
     tooltip_contents = []
 
     # Create color mapping for each cell
-    color_styles = pd.DataFrame('', index=mean_table.index, columns=mean_table.columns)
+    color_styles = pd.DataFrame('', index=mean_table.index, columns=band_order)
     
     # Iterate through bands and create combined display and colors
     for band in band_order:
@@ -760,12 +760,13 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
             for idx, row in mean_table.iterrows():
                 # Get SNR value and count
                 snr = row[band] if band in row else None
-                count = count_table.at[idx, band] if band in count_table.columns else 0
+                count = count_table.at[idx, 'band'] if band in count_table.columns else 0
+                zone = row['zone']  # Get the zone number
                 
                 try:
                     count = int(count) if count != '' else 0
                     if not pd.isna(snr) and count > 0:
-                        color_styles.at[idx, band] = snr_to_color(snr, count)
+                        color_styles.at[idx, band] = snr_to_color(snr, count, zone)  # Pass the zone to snr_to_color
                 except (ValueError, TypeError):
                     count = 0
                 
@@ -789,8 +790,11 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
     color_styles = color_styles[band_order]  # Match columns with combined_table
 
     # Apply the styles to the combined table
-    styled_table = combined_table.style.apply(lambda x: color_styles, axis=None).set_caption(caption_string)
-
+    styled_table = combined_table.style.set_properties(**{
+        'class': 'data-cell',
+        'font-size': '0.85rem'
+    }).apply(lambda x: color_styles, axis=None).set_caption(caption_string)
+    
     styled_table.set_properties(subset=['zone'], **{'font-weight': 'bold'})
     styled_table.set_properties(**{'text-align': 'center'})
 
