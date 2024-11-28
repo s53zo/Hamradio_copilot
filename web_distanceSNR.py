@@ -790,14 +790,9 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
 
     # Create color mapping for each cell
     color_styles = pd.DataFrame('', index=mean_table.index, columns=band_order)
-    
-    # First, add the Scale column colors
-    for idx in range(len(mean_table)):
-        color_styles.at[idx, 'Scale'] = get_color_scale(idx)
-        combined_table.at[idx, 'Scale'] = ''  # Empty cell, color will show through
-    
-    # Then iterate through bands for SNR coloring
-    for band in band_order[:6]:  # Only process actual bands, not Scale and Propagation
+        
+    # Iterate through bands
+    for band in band_order:
         if band in mean_table.columns:
             combined_results = []
             for idx, row in mean_table.iterrows():
@@ -819,21 +814,7 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
             tooltip_contents.extend([content for _, content in combined_results if content])
         else:
             combined_table[band] = ' '
-    
-    # Add Scale and Propagation descriptions
-    for idx, row in mean_table.iterrows():
-        path_adjusted_snr = None
-        for band in ['10', '15', '20', '40', '80', '160']:
-            if band in row and not pd.isna(row[band]) and row[band] != '':
-                try:
-                    snr = float(row[band])
-                    expected_attenuation = calculate_expected_attenuation(row['zone'])
-                    path_adjusted_snr = snr + expected_attenuation
-                    break
-                except (ValueError, TypeError):
-                    continue
-        combined_table.at[idx, 'Propagation'] = get_propagation_description(path_adjusted_snr)
-
+            
     # Handle 'zone' column separately
     if 'zone' in combined_table.columns and 'zone' in mean_table.columns:
         combined_table['zone'] = mean_table['zone']
