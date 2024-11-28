@@ -760,7 +760,7 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
             for idx, row in mean_table.iterrows():
                 # Get SNR value and count
                 snr = row[band] if band in row else None
-                count = count_table.at[idx, 'band'] if band in count_table.columns else 0
+                count = count_table.at[idx, band] if band in count_table.columns else 0
                 zone = row['zone']  # Get the zone number
                 
                 try:
