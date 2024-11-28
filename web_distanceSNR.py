@@ -115,8 +115,8 @@ debug = args.debug
 include_solar_data = args.include_solar_data
 
 #band_order = ['160', '80', '40', '30', '20', '17', '15', '12', '10', '6']
-#band_order = ['160', '80', '40', '20', '15', '10']
-band_order = ['160', '80', '40', '20', '15', '10', 'Scale', 'Propagation']
+band_order = ['160', '80', '40', '20', '15', '10']
+#band_order = ['160', '80', '40', '20', '15', '10', 'Scale', 'Propagation']
 
 # Mapping zone numbers to descriptions...
 zone_name_map = {
