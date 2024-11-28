@@ -792,22 +792,31 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
     color_styles = pd.DataFrame('', index=mean_table.index, columns=band_order)
     color_styles['Scale'] = [get_color_scale(i) for i in range(len(mean_table))]
     
-    # Then, iterate through bands
+    # Iterate through bands
     for band in band_order[:6]:  # Only process actual bands, not Scale and Propagation
         if band in mean_table.columns:
             combined_results = []
             for idx, row in mean_table.iterrows():
-                snr = row[band] if band in row else None
-                count = count_table.at[idx, band] if band in count_table.columns else 0
-                zone = row['zone']
-                
+                # Get SNR value and count, with proper type checking
                 try:
-                    count = int(count) if count != '' else 0
-                    if not pd.isna(snr) and count > 0:
-                        color_styles.at[idx, band] = snr_to_color(snr, count, zone)
+                    snr = row[band] if band in row and row[band] != '' and not pd.isna(row[band]) else None
+                    snr = float(snr) if snr is not None else None
+                except (ValueError, TypeError):
+                    snr = None
+                    
+                try:
+                    count = count_table.at[idx, band] if band in count_table.columns else 0
+                    count = int(count) if count != '' and not pd.isna(count) else 0
                 except (ValueError, TypeError):
                     count = 0
+    
+                zone = row['zone']
                 
+                # Set color style if we have valid data
+                if snr is not None and count > 0:
+                    color_styles.at[idx, band] = snr_to_color(snr, count, zone)
+                
+                # Combine SNR and count display
                 result = combine_snr_count(row, count_table, band, df, idx)
                 combined_results.append(result)
             
@@ -816,18 +825,21 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
         else:
             combined_table[band] = ' '
     
-    # Add Scale column to combined_table
-    combined_table['Scale'] = ''  # Empty values, we'll use color_styles for coloring
+    # Add Scale column to combined_table (empty values, color_styles will handle coloring)
+    combined_table['Scale'] = ''
     
-    # Add Propagation descriptions
+    # Add Propagation descriptions with proper error handling
     for idx, row in mean_table.iterrows():
         path_adjusted_snr = None
         for band in ['10', '15', '20', '40', '80', '160']:
-            if band in row and not pd.isna(row[band]):
-                snr = float(row[band])
-                expected_attenuation = calculate_expected_attenuation(row['zone'])
-                path_adjusted_snr = snr + expected_attenuation
-                break
+            if band in row and not pd.isna(row[band]) and row[band] != '':
+                try:
+                    snr = float(row[band])
+                    expected_attenuation = calculate_expected_attenuation(row['zone'])
+                    path_adjusted_snr = snr + expected_attenuation
+                    break
+                except (ValueError, TypeError):
+                    continue
         combined_table.at[idx, 'Propagation'] = get_propagation_description(path_adjusted_snr)
 
     # Handle 'zone' column separately
