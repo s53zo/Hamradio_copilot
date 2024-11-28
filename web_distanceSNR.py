@@ -243,11 +243,11 @@ def snr_to_color(val, count, zone):
         intensity = get_intensity(count)
         
         # Modify saturation and lightness for better distinction
-        sat = 0.7  # Higher saturation for more vivid colors
+        sat = 0.9  # Higher saturation for more vivid colors
         
         # Adjust lightness range to make colors more distinct
-        min_lightness = 0.4  # Brighter minimum
-        max_lightness = 0.6  # Darker maximum
+        min_lightness = 0.3  # Brighter minimum
+        max_lightness = 0.8  # Darker maximum
         lightness = min_lightness + intensity * (max_lightness - min_lightness)
         
         # Convert to RGB and hex
