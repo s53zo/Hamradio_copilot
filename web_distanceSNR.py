@@ -213,50 +213,60 @@ def hsl_to_rgb(h, s, l):
 
 def snr_to_color(val, count):
     """
-    Convert SNR value and station count to color.
-    Uses a new color scheme with better visual separation between signal levels.
+    Simplified version of the color function for debugging
     """
-    if pd.isna(val) or val == ' ' or val == '':
-        return 'background-color: #ffffff; padding: 1px 2px;'
-    
     try:
-        # Make sure we have a numeric value
+        if pd.isna(val) or val == ' ' or val == '':
+            return 'background-color: #ffffff'
+            
         val = float(val)
-        count = int(count) if count != '' else 0
-
-        # Get intensity based on station count
-        intensity = get_intensity(count)
+        count = int(count) if pd.notnull(count) else 0
         
-        # Base lightness adjustment based on intensity
-        min_lightness = 0.25
-        max_lightness = 0.65
-        lightness = min_lightness + intensity * (max_lightness - min_lightness)
-        sat = 0.85
-
-        # Color selection based on SNR value
+        # Simple color scheme for testing
         if val >= 0:
-            # Orange range
-            hex_color = f'#{int(255*intensity):02x}{int(152*intensity):02x}{int(0):02x}'
+            return 'background-color: #ff9800'  # orange
         elif val >= -5:
-            # Yellow range
-            hex_color = f'#{int(255*intensity):02x}{int(235*intensity):02x}{int(59*intensity):02x}'
+            return 'background-color: #ffeb3b'  # yellow
         elif val >= -10:
-            # Green range
-            hex_color = f'#{int(76*intensity):02x}{int(175*intensity):02x}{int(80*intensity):02x}'
+            return 'background-color: #4caf50'  # green
         elif val >= -15:
-            # Light blue range
-            hex_color = f'#{int(129*intensity):02x}{int(212*intensity):02x}{int(250*intensity):02x}'
+            return 'background-color: #81d4fa'  # light blue
         elif val >= -20:
-            # Blue range
-            hex_color = f'#{int(33*intensity):02x}{int(150*intensity):02x}{int(243*intensity):02x}'
+            return 'background-color: #2196f3'  # blue
         else:
-            # Deep purple range
-            hex_color = f'#{int(26*intensity):02x}{int(35*intensity):02x}{int(126*intensity):02x}'
+            return 'background-color: #1a237e'  # deep purple
+    except Exception as e:
+        print(f"Error in color function: val={val}, count={count}, error={str(e)}")
+        return 'background-color: #ffffff'
 
-        return f'background-color: {hex_color}; padding: 1px 2px; font-size: 0.85rem;'
-    except (ValueError, TypeError) as e:
-        print(f"Error in snr_to_color: {e} for val={val}, count={count}")
-        return 'background-color: #ffffff; padding: 1px 2px;'
+# In the main code, modify how the styling is applied:
+
+# Create color mapping for each cell
+color_styles = pd.DataFrame('', index=mean_table.index, columns=mean_table.columns)
+
+# Iterate through bands
+for band in band_order:
+    if band in mean_table.columns:
+        for idx, row in mean_table.iterrows():
+            snr = row[band] if band in row else None
+            count = count_table.at[idx, band] if band in count_table.columns else 0
+            
+            try:
+                if not pd.isna(snr):
+                    color_styles.at[idx, band] = snr_to_color(snr, count)
+            except Exception as e:
+                print(f"Error processing band {band}, row {idx}: {str(e)}")
+
+# Apply the styles to the combined table
+styled_table = combined_table.style.apply(lambda x: color_styles, axis=None)
+
+# Add some debug prints
+print("Sample of color_styles:")
+print(color_styles.head())
+print("\nSample of mean_table:")
+print(mean_table.head())
+print("\nSample of count_table:")
+print(count_table.head())
 
 def get_intensity(count, max_count=1000):
     """
