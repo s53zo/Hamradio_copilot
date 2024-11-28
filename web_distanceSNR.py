@@ -171,8 +171,8 @@ def calculate_expected_attenuation(to_zone):
     to_idx = to_zone - 1
     distance = distance_matrix[from_idx][to_idx]
     
-    # Calculate expected attenuation (1dB per 100km)
-    attenuation = distance / 100.0 / 10
+    # Calculate expected attenuation (0,2dB per 100km)
+    attenuation = distance / 100.0 / 5
     
     return attenuation
 
