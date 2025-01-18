@@ -570,10 +570,17 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
 def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False):
     # Connect to the SQLite database
     conn = sqlite3.connect('callsigns.db')
-  
-    # Read data from the SQLite table `callsigns` into a pandas DataFrame
+    
+    # Modified query to get both all spots and S53M spots
     query = """
-    SELECT zone, band, CAST(snr AS FLOAT) as snr, timestamp, spotter, spotted_station
+    SELECT 
+        zone, 
+        band, 
+        CAST(snr AS FLOAT) as snr, 
+        timestamp, 
+        spotter, 
+        spotted_station,
+        CASE WHEN spotter = 'S53M' THEN 1 ELSE 0 END as is_s53m
     FROM callsigns
     """
     
@@ -586,11 +593,12 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
                 'band': 'str',
                 'snr': 'float',
                 'spotter': 'str',
-                'spotted_station': 'str'
+                'spotted_station': 'str',
+                'is_s53m': 'int'
             }
         )
         
-        # Convert 'timestamp' from UNIX timestamp (seconds) to datetime with UTC timezone
+        # Convert 'timestamp' from UNIX timestamp to datetime with UTC timezone
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s', utc=True, errors='coerce')
     except Exception as e:
         print(f"Error: Unable to read data from the SQLite database. {e}")
@@ -598,30 +606,22 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
     finally:
         conn.close()
 
-    if debug:
-        print("Initial DataFrame:")
-        print(df.head())
-
     df = delete_old(df, span)
 
-    if debug:
-        print(f"DataFrame after deleting entries older than {span} hours:")
-        print(df.head())
-
-    # Set 'zone' as a categorical variable with categories from 1 to 40
+    # Set categorical variables
     df['zone'] = df['zone'].astype(int)
     df['zone'] = df['zone'].astype('category')
     df['zone'] = df['zone'].cat.set_categories(range(1, 41))
 
-    # Set 'band' as a categorical variable with desired order
     df['band'] = df['band'].astype(str)
     df['band'] = df['band'].astype('category')
     df['band'] = df['band'].cat.set_categories(band_order)
 
     all_zones = pd.Index(range(1, 41), name='zone')
 
-    # Create count table
-    count_table = df.groupby(['zone', 'band'], observed=True).agg(
+    # Create separate tables for all spots and S53M spots
+    # All spots count table
+    count_table_all = df.groupby(['zone', 'band'], observed=True).agg(
         count=('spotter', lambda x: len(set(zip(x, df.loc[x.index, 'spotted_station']))))
     ).reset_index().pivot(
         index='zone',
@@ -629,8 +629,28 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
         values='count'
     ).reindex(all_zones, fill_value=0)
 
-    # Create mean table
-    mean_table = df.pivot_table(
+    # S53M spots count table
+    s53m_df = df[df['is_s53m'] == 1]
+    count_table_s53m = s53m_df.groupby(['zone', 'band'], observed=True).agg(
+        count=('spotter', lambda x: len(set(zip(x, s53m_df.loc[x.index, 'spotted_station']))))
+    ).reset_index().pivot(
+        index='zone',
+        columns='band',
+        values='count'
+    ).reindex(all_zones, fill_value=0)
+
+    # All spots mean table
+    mean_table_all = df.pivot_table(
+        values='snr',
+        index='zone',
+        columns='band',
+        aggfunc='median',
+        observed=True,
+        dropna=False
+    ).reindex(all_zones)
+
+    # S53M spots mean table
+    mean_table_s53m = s53m_df.pivot_table(
         values='snr',
         index='zone',
         columns='band',
@@ -640,17 +660,22 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
     ).reindex(all_zones)
 
     # Convert numeric columns to float
-    numeric_columns = mean_table.select_dtypes(include=['number']).columns
-    mean_table[numeric_columns] = mean_table[numeric_columns].astype('float')
+    for table in [mean_table_all, mean_table_s53m]:
+        numeric_columns = table.select_dtypes(include=['number']).columns
+        table[numeric_columns] = table[numeric_columns].astype('float')
 
-    # Ensure both tables have the same index
-    all_zones = sorted(set(count_table.index) | set(mean_table.index))
-    count_table = count_table.reindex(all_zones, fill_value=0)
-    mean_table = mean_table.reindex(all_zones)
+    # Ensure all tables have the same index
+    all_zones = sorted(set(count_table_all.index) | set(mean_table_all.index))
+    count_table_all = count_table_all.reindex(all_zones, fill_value=0)
+    count_table_s53m = count_table_s53m.reindex(all_zones, fill_value=0)
+    mean_table_all = mean_table_all.reindex(all_zones)
+    mean_table_s53m = mean_table_s53m.reindex(all_zones)
 
     # Reformat the tables
-    count_table = reformat_table(count_table)
-    mean_table = reformat_table(mean_table)
+    count_table_all = reformat_table(count_table_all)
+    count_table_s53m = reformat_table(count_table_s53m)
+    mean_table_all = reformat_table(mean_table_all)
+    mean_table_s53m = reformat_table(mean_table_s53m)
 
     if debug:
         print("Count Table:")
