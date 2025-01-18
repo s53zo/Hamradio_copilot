@@ -873,7 +873,8 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
             ('background-color', 'rgba(255, 255, 255, 0.95)'),
             ('z-index', '1'),
             ('font-weight', 'bold'),
-            ('white-space', 'nowrap')
+            ('white-space', 'nowrap'),
+            ('text-align', 'center')  # Center align the headers
         ]},
         {'selector': 'td', 'props': [
             ('padding', '1px 2px'),
@@ -886,6 +887,19 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
             ('min-width', '35px')
         ]}
     ])
+
+    # Create the band headers with sub-text
+    band_headers = {
+        'zone': 'Zone',
+        '160': '160m\nAll / S53M',
+        '80': '80m\nAll / S53M',
+        '40': '40m\nAll / S53M',
+        '20': '20m\nAll / S53M',
+        '15': '15m\nAll / S53M',
+        '10': '10m\nAll / S53M'
+    }
+    
+    styled_table.columns = band_headers
 
     # Convert to HTML
     html_table = styled_table.hide(axis="index").to_html()
