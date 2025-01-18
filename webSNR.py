@@ -489,6 +489,14 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
                 font-weight: bold;
             }}
 
+            th span.subtext {{
+                display: block;
+                font-size: 0.7rem;
+                color: #666;
+                font-weight: normal;
+                white-space: pre-line;
+            }}
+
             td {{
                 padding: 0;
                 border: 1px solid #ddd;
@@ -523,15 +531,26 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
                 display: grid;
                 grid-template-columns: 1fr 1fr;
                 width: 100%;
+                height: 100%;
+                margin: 0;
+                padding: 0;
             }}
 
             td > div.grid > div {{
                 padding: 2px;
                 text-align: center;
+                display: flex;
+                align-items: center;
+                justify-content: center;
             }}
 
             td > div.grid > div:first-child {{
                 border-right: 1px solid #ddd;
+            }}
+
+            /* Remove background colors from cells */
+            td[class*="col"] {{
+                background-color: transparent !important;
             }}
 
             .tippy-box[data-theme~='zone'] {{
@@ -543,56 +562,6 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
                 width: auto !important;
             }}
 
-
-
-            th {
-                position: sticky;
-                top: 0;
-                background-color: rgba(255, 255, 255, 0.95);
-                z-index: 10;
-                padding: 2px;
-                font-size: 0.85rem;
-                border: 1px solid #ddd;
-                font-weight: bold;
-            }
-        
-            th span.subtext {
-                display: block;
-                font-size: 0.7rem;
-                color: #666;
-                font-weight: normal;
-            }
-        
-            td > div.grid {
-                display: grid;
-                grid-template-columns: 1fr 1fr;
-                width: 100%;
-                height: 100%;
-                margin: 0;
-                padding: 0;
-            }
-        
-            td > div.grid > div {
-                padding: 2px;
-                text-align: center;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            }
-        
-            td > div.grid > div:first-child {
-                border-right: 1px solid #ddd;
-            }
-        
-            .text-blue-600 {
-                color: #2563eb !important;
-            }
-        
-            /* Remove background colors from cells */
-            td[class*="col"] {
-                background-color: transparent !important;
-            }
-            
             .tippy-box[data-theme~='zone'] .tippy-content {{
                 padding: 8px 12px;
             }}
@@ -644,7 +613,7 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
             }}
 
             .text-blue-600 {{
-                color: #2563eb;
+                color: #2563eb !important;
             }}
 
             .count-text {{
@@ -712,7 +681,7 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
                     content(reference) {{
                         const id = reference.getAttribute('data-tooltip-content');
                         const template = document.querySelector(id);
-                        return template.innerHTML;
+                        return template ? template.innerHTML : '';
                     }},
                     allowHTML: true,
                     maxWidth: 'none',
