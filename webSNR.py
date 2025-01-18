@@ -461,139 +461,198 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
         <meta charset="UTF-8">
         <meta http-equiv="refresh" content="60">
         <title>SNR Report</title>
-        <style>
-            body {{
-                margin: 0;
-                padding: 4px;
-                font-family: 'Roboto', monospace;
-                font-size: 0.85rem;
-                background: #ffffff;
-            }}
+        <!-- This goes in the <style> section of your HTML template -->
+    <style>
+        body {
+            margin: 0;
+            padding: 4px;
+            font-family: 'Roboto', monospace;
+            font-size: 0.85rem;
+            background: #ffffff;
+        }
     
-            table {{
-                border-collapse: collapse;
-                width: 100%;
-                max-width: 800px;
-                margin: 0 auto;
-                table-layout: fixed;
-            }}
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
+            table-layout: fixed;
+        }
     
-            th {{
-                position: sticky;
-                top: 0;
-                background-color: rgba(255, 255, 255, 0.95);
-                z-index: 10;
-                padding: 2px;
-                font-size: 0.85rem;
-                border: 1px solid #ddd;
-                font-weight: bold;
-            }}
+        th {
+            position: sticky;
+            top: 0;
+            background-color: rgba(255, 255, 255, 0.95);
+            z-index: 10;
+            padding: 2px;
+            font-size: 0.85rem;
+            border: 1px solid #ddd;
+            font-weight: bold;
+        }
     
-            td {{
-                padding: 1px 2px;
-                border: 1px solid #ddd;
-                text-align: center;
-                white-space: nowrap;
-                overflow: hidden;
-                text-overflow: ellipsis;
-            }}
+        td {
+            padding: 0;  /* Remove default padding as it's handled by the grid */
+            border: 1px solid #ddd;
+            text-align: center;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
     
-            tr:nth-child(even) {{
-                background-color: rgba(0, 0, 0, 0.02);
-            }}
+        tr:nth-child(even) {
+            background-color: rgba(0, 0, 0, 0.02);
+        }
     
-            td:first-child {{
-                width: 35px;
-                font-weight: bold;
-                cursor: help;
-                padding: 0;
-            }}
-
-            .zone-tooltip {{
-                padding: 1px 2px;
-                background-color: rgba(0, 0, 0, 0.02);
-                transition: background-color 0.2s;
-            }}
-
-            .zone-tooltip:hover {{
-                background-color: rgba(0, 0, 0, 0.05);
-            }}
-               
-            .tippy-box[data-theme~='zone'] {{
-                background-color: #333;
-                color: white;
-                font-size: 0.8rem;
-                line-height: 1.3;
-                max-width: none !important;
-                width: auto !important;
-            }}
-
-            .tippy-box[data-theme~='zone'] .tippy-content {{
-                padding: 8px 12px;
-            }}
+        td:first-child {
+            width: 35px;
+            font-weight: bold;
+            cursor: help;
+            padding: 2px;  /* Restore padding for zone column */
+        }
     
-            .tippy-box[data-theme~='zone'] .tippy-arrow {{
-                color: #333;
-            }}
+        .zone-tooltip {
+            padding: 1px 2px;
+            background-color: rgba(0, 0, 0, 0.02);
+            transition: background-color 0.2s;
+        }
     
-            .tippy-content {{
-                padding: 0 !important;
-                font-size: 0.8rem;
-                max-width: none !important;
-                width: auto !important;
-                background: white;
-            }}
-
-            .tooltip {{
-                cursor: pointer;
-            }}
-
-            .station-list {{
-                display: inline-grid;
-                grid-template-columns: repeat(4, minmax(70px, max-content));
-                gap: 2px;
-                padding: 4px;
-                background: #e4f0f3;
-                color: #333333;
-                width: fit-content;
-                max-width: 100%;
-            }}
-
-            .station-list div {{
-                padding: 2px 4px;
-                white-space: nowrap;
-                overflow: hidden;
-                text-overflow: ellipsis;
-            }}
+        .zone-tooltip:hover {
+            background-color: rgba(0, 0, 0, 0.05);
+        }
     
-            .tooltip_templates {{
-                display: none;
-            }}
+        /* Split cell grid layout */
+        td > div.grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            width: 100%;
+        }
     
-            caption {{
-                padding: 2px;
-                font-size: 0.85rem;
-                font-weight: bold;
-            }}
-
-            .count-text {{
-                font-size: 0.7rem;
-                color: #666;
-            }}
-
-            .legend {{
-                position: fixed;
-                bottom: 20px;
-                left: 20px;
-                right: 20px;
-                background: rgba(255, 255, 255, 0.95);
-                padding: 15px;
-                border-radius: 8px;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-                z-index: 1000;
-                text-align: center;
-            }}
-        </style>
+        td > div.grid > div {
+            padding: 2px;
+            text-align: center;
+        }
+    
+        td > div.grid > div:first-child {
+            border-right: 1px solid #ddd;
+        }
+    
+        /* Tooltip styles */
+        .tippy-box[data-theme~='zone'] {
+            background-color: #333;
+            color: white;
+            font-size: 0.8rem;
+            line-height: 1.3;
+            max-width: none !important;
+            width: auto !important;
+        }
+    
+        .tippy-box[data-theme~='zone'] .tippy-content {
+            padding: 8px 12px;
+        }
+    
+        .tippy-box[data-theme~='zone'] .tippy-arrow {
+            color: #333;
+        }
+    
+        .tippy-content {
+            padding: 0 !important;
+            font-size: 0.8rem;
+            max-width: none !important;
+            width: auto !important;
+            background: white;
+        }
+    
+        .tooltip {
+            cursor: pointer;
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+    
+        /* Station list in tooltips */
+        .station-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 4px;
+            padding: 8px;
+            background: #e4f0f3;
+            color: #333333;
+            max-width: 600px;
+        }
+    
+        .station-list div {
+            padding: 2px 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+    
+        .tooltip_templates {
+            display: none;
+        }
+    
+        caption {
+            padding: 2px;
+            font-size: 0.85rem;
+            font-weight: bold;
+        }
+    
+        /* Text styles */
+        .text-blue-600 {
+            color: #2563eb;
+        }
+    
+        .count-text {
+            font-size: 0.7rem;
+            color: #666;
+        }
+    
+        .text-center {
+            text-align: center;
+        }
+    
+        /* Arrow colors */
+        .trend-up {
+            color: #28a745;
+        }
+    
+        .trend-down {
+            color: #dc3545;
+        }
+    
+        .trend-stable {
+            color: #000000;
+        }
+    
+        /* Legend at the bottom */
+        .legend {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            z-index: 1000;
+            text-align: center;
+        }
+    
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            table {
+                font-size: 0.75rem;
+            }
+            
+            td > div.grid > div {
+                padding: 1px;
+            }
+            
+            .station-list {
+                grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            }
+        }
+    </style>
         <link rel="stylesheet" href="https://unpkg.com/tippy.js@6/animations/scale.css">
     </head>
     <body>
