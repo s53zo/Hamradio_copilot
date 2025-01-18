@@ -301,77 +301,137 @@ def snr_to_color(val, count):
         return 'background-color: #ffffff; padding: 1px 2px;'
 
 
-def combine_snr_count(mean_table_row, count_table, band, df, row_index):
+def combine_snr_count(mean_table_all_row, mean_table_s53m_row, count_table_all, count_table_s53m, band, df, df_s53m, row_index):
     """
-    Combines SNR and count data with proper empty value handling.
+    Combines SNR and count data for both all spots and S53M spots with proper empty value handling.
     """
     try:
-        zone = mean_table_row['zone']
+        zone = mean_table_all_row['zone']
         
-        # Handle SNR value - convert to float or None
-        snr = mean_table_row[band] if band in mean_table_row else None
-        if isinstance(snr, str) and snr.strip() == '':
-            snr = None
-        elif snr is not None:
+        # Process all spots data
+        snr_all = mean_table_all_row[band] if band in mean_table_all_row else None
+        if isinstance(snr_all, str) and snr_all.strip() == '':
+            snr_all = None
+        elif snr_all is not None:
             try:
-                snr = float(snr)
+                snr_all = float(snr_all)
             except (ValueError, TypeError):
-                snr = None
+                snr_all = None
         
-        # Handle count value - convert to int or 0
-        count = count_table.at[row_index, band] if band in count_table.columns else 0
-        if pd.isna(count) or (isinstance(count, str) and count.strip() == ''):
-            count = 0
+        count_all = count_table_all.at[row_index, band] if band in count_table_all.columns else 0
+        if pd.isna(count_all) or (isinstance(count_all, str) and count_all.strip() == ''):
+            count_all = 0
         else:
             try:
-                count = int(count)
+                count_all = int(count_all)
             except (ValueError, TypeError):
-                count = 0
+                count_all = 0
 
-        # Generate display text
-        if snr is None and count == 0:
-            return "", None
-        elif snr is None:
-            display_text = f'N/A <span class="count-text">({count})</span>'
+        # Process S53M spots data
+        snr_s53m = mean_table_s53m_row[band] if band in mean_table_s53m_row else None
+        if isinstance(snr_s53m, str) and snr_s53m.strip() == '':
+            snr_s53m = None
+        elif snr_s53m is not None:
+            try:
+                snr_s53m = float(snr_s53m)
+            except (ValueError, TypeError):
+                snr_s53m = None
+        
+        count_s53m = count_table_s53m.at[row_index, band] if band in count_table_s53m.columns else 0
+        if pd.isna(count_s53m) or (isinstance(count_s53m, str) and count_s53m.strip() == ''):
+            count_s53m = 0
         else:
-            display_text = f'{int(round(snr))} <span class="count-text">({count})</span>'
+            try:
+                count_s53m = int(count_s53m)
+            except (ValueError, TypeError):
+                count_s53m = 0
 
-        # Compute slope and get arrow only if we have data
-        if snr is not None and count > 0:
-            slope = compute_slope(df, zone, band)
-            slope_arrow = slope_to_unicode(slope)
+        # Generate display text for all spots
+        if snr_all is None and count_all == 0:
+            display_text_all = "--"
+        elif snr_all is None:
+            display_text_all = f'N/A ({count_all})'
+        else:
+            display_text_all = f'{int(round(snr_all))} ({count_all})'
 
-            # Determine arrow color
-            if pd.isna(slope) or (-0.1 <= slope <= 0.1):
-                arrow_color = '#000000'  # black
-            elif slope > 0.1:
-                arrow_color = '#28a745'  # green
+        # Generate display text for S53M spots
+        if snr_s53m is None and count_s53m == 0:
+            display_text_s53m = "--"
+        elif snr_s53m is None:
+            display_text_s53m = f'N/A ({count_s53m})'
+        else:
+            display_text_s53m = f'{int(round(snr_s53m))} ({count_s53m})'
+
+        # Add trend indicators if we have data
+        all_slope = None
+        s53m_slope = None
+
+        if snr_all is not None and count_all > 0:
+            all_slope = compute_slope(df, zone, band)
+            all_arrow = slope_to_unicode(all_slope)
+            display_text_all = f'{display_text_all} {all_arrow}'
+
+        if snr_s53m is not None and count_s53m > 0:
+            s53m_slope = compute_slope(df_s53m, zone, band)
+            s53m_arrow = slope_to_unicode(s53m_slope)
+            display_text_s53m = f'{display_text_s53m} {s53m_arrow}'
+
+        # Determine arrow colors
+        if all_slope is not None:
+            if pd.isna(all_slope) or (-0.1 <= all_slope <= 0.1):
+                all_arrow_color = '#000000'  # black
+            elif all_slope > 0.1:
+                all_arrow_color = '#28a745'  # green
             else:
-                arrow_color = '#dc3545'  # red
+                all_arrow_color = '#dc3545'  # red
+        
+        if s53m_slope is not None:
+            if pd.isna(s53m_slope) or (-0.1 <= s53m_slope <= 0.1):
+                s53m_arrow_color = '#000000'  # black
+            elif s53m_slope > 0.1:
+                s53m_arrow_color = '#28a745'  # green
+            else:
+                s53m_arrow_color = '#dc3545'  # red
 
-            styled_arrow = f'<span style="font-size: 0.9rem; color: {arrow_color};">{slope_arrow}</span>'
-            display_text_with_arrow = f'{display_text} {styled_arrow}'
-        else:
-            display_text_with_arrow = display_text
-
-        # Get spotted stations only if we have data
-        if count > 0:
-            relevant_spots = df[(df['zone'] == zone) & (df['band'] == band)].copy()
-            unique_stations = sorted(set(relevant_spots['spotted_station']))
-            
+        # Create tooltip content if we have data
+        tooltip_content = None
+        if count_all > 0 or count_s53m > 0:
             tooltip_id = f"tooltip_{row_index}_{band}"
-         
-            tooltip_content_html = '<div class="station-list">'
-            for station in unique_stations:
-                display_station = station.replace('.', '/') #to avoid KH0.AA3B and have KH0/AA3B
-                tooltip_content_html += f'<div>{html.escape(display_station)}</div>'
-            tooltip_content_html += '</div>'
-
-            cell_html = f'<span class="tooltip" data-tooltip-content="#{tooltip_id}">{display_text_with_arrow}</span>'
             
-            return cell_html, (tooltip_id, tooltip_content_html)
-        else:
-            return display_text_with_arrow, None
+            tooltip_content_html = '<div class="station-list">'
+            
+            # Add all spots
+            if count_all > 0:
+                tooltip_content_html += '<div style="font-weight: bold; margin-bottom: 4px;">All Spots:</div>'
+                relevant_spots = df[(df['zone'] == zone) & (df['band'] == band)].copy()
+                unique_stations = sorted(set(relevant_spots['spotted_station']))
+                for station in unique_stations:
+                    display_station = station.replace('.', '/')
+                    tooltip_content_html += f'<div>{html.escape(display_station)}</div>'
+            
+            # Add S53M spots
+            if count_s53m > 0:
+                tooltip_content_html += '<div style="font-weight: bold; margin-top: 8px; margin-bottom: 4px;">S53M Spots:</div>'
+                relevant_spots = df_s53m[(df_s53m['zone'] == zone) & (df_s53m['band'] == band)].copy()
+                unique_stations = sorted(set(relevant_spots['spotted_station']))
+                for station in unique_stations:
+                    display_station = station.replace('.', '/')
+                    tooltip_content_html += f'<div>{html.escape(display_station)}</div>'
+            
+            tooltip_content_html += '</div>'
+            tooltip_content = (tooltip_id, tooltip_content_html)
+
+        # Create the split cell HTML
+        cell_html = f'''
+        <div class="tooltip" data-tooltip-content="#{tooltip_id if tooltip_content else ''}">
+            <div class="grid grid-cols-2">
+                <div class="p-2 text-center border-r">{display_text_all}</div>
+                <div class="p-2 text-center text-blue-600">{display_text_s53m}</div>
+            </div>
+        </div>
+        '''
+
+        return cell_html.strip(), tooltip_content
 
     except Exception as e:
         print(f"Error processing zone {zone if 'zone' in locals() else 'unknown'} and band {band}: {str(e)}")
