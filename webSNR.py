@@ -797,34 +797,45 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
     now = dt.datetime.now(dt.timezone.utc).strftime("%b %d, %Y %H:%M")
     caption_string = f"Last {int(span*60)} minutes SNR of spots in S5 and around - refresh at {now} GMT"
 
-    # Combine mean_table and count_table into a single table with desired cell content
-    combined_table = mean_table.copy()
+    # Initialize combined table from mean_table_all
+    combined_table = mean_table_all.copy()
     
     # Tooltip content list
     tooltip_contents = []
 
     # Create color mapping for each cell
-    color_styles = pd.DataFrame('', index=mean_table.index, columns=mean_table.columns)
+    color_styles = pd.DataFrame('', index=mean_table_all.index, columns=mean_table_all.columns)
     
     # Iterate through bands and create combined display and colors
     for band in band_order:
-        if band in mean_table.columns:
+        if band in mean_table_all.columns:
             combined_results = []
-            for idx, row in mean_table.iterrows():
-                # Get SNR value and count
-                snr = row[band] if band in row else None
-                count = count_table.at[idx, band] if band in count_table.columns else 0
+            for idx, row in mean_table_all.iterrows():
+                # Get corresponding S53M row
+                s53m_row = mean_table_s53m.iloc[idx]
                 
+                # Combine SNR and count display for both all spots and S53M spots
+                result = combine_snr_count(
+                    row,
+                    s53m_row,
+                    count_table_all,
+                    count_table_s53m,
+                    band,
+                    df,
+                    s53m_df,
+                    idx
+                )
+                combined_results.append(result)
+
+                # Get counts for color styling
+                count = count_table_all.at[idx, band] if band in count_table_all.columns else 0
                 try:
                     count = int(count) if count != '' else 0
+                    snr = row[band] if band in row else None
                     if not pd.isna(snr) and count > 0:
                         color_styles.at[idx, band] = snr_to_color(snr, count)
                 except (ValueError, TypeError):
-                    count = 0
-                
-                # Combine SNR and count display
-                result = combine_snr_count(row, count_table, band, df, idx)
-                combined_results.append(result)
+                    pass
             
             combined_table[band] = [result[0] for result in combined_results]
             tooltip_contents.extend([content for _, content in combined_results if content])
@@ -832,9 +843,9 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
             combined_table[band] = ' '
 
     # Handle 'zone' column separately
-    if 'zone' in combined_table.columns and 'zone' in mean_table.columns:
-        combined_table['zone'] = mean_table['zone']
-        combined_table['zone_display'] = mean_table['zone_display']
+    if 'zone' in combined_table.columns and 'zone' in mean_table_all.columns:
+        combined_table['zone'] = mean_table_all['zone']
+        combined_table['zone_display'] = mean_table_all['zone_display']
 
     # Ensure the columns are ordered as per band_order
     combined_table = combined_table[['zone_display'] + band_order]
