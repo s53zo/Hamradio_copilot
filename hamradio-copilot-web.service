@@ -3,12 +3,10 @@ Description=Hamradio Data Analysis Service
 After=network.target
 
 [Service]
-User=root
-Type=simple
+User=user
 WorkingDirectory=/opt/hamradio-copilot
-ExecStart=/opt/hamradio-copilot/start_copilot.sh
+ExecStart=python3 /opt/hamradio-copilot/webSNR.py -o /opt/hamradio-copilot/html/
 Restart=always
 
 [Install]
 WantedBy=multi-user.target
-
