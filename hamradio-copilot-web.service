@@ -4,8 +4,9 @@ After=network.target
 
 [Service]
 User=root
+Type=simple
 WorkingDirectory=/opt/hamradio-copilot
-ExecStart=python3 /opt/hamradio-copilot/webSNR.py -o /opt/hamradio-copilot/html/
+ExecStart=/opt/hamradio-copilot/start_copilot.sh
 Restart=always
 
 [Install]
