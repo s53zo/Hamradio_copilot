@@ -472,7 +472,7 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
             width: 100%;
             max-width: 1200px;
             margin: 0 auto;
-            table-layout: fixed;
+            table-layout: auto;
         }
         
         th {
