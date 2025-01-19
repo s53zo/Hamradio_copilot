@@ -529,19 +529,48 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
             height: 100%;
             margin: 0;
             padding: 0;
+            min-height: 28px;  /* Ensure consistent height */
         }
         
         td > div.grid > div {
-            padding: 4px 8px;
+            padding: 4px 2px;
             text-align: center;
             display: flex;
             align-items: center;
             justify-content: center;
-            min-width: 80px;
+            min-width: 60px;  /* Minimum width for each half */
+            position: relative;  /* For border positioning */
         }
         
+        /* Left cell */
         td > div.grid > div:first-child {
             border-right: 1px solid #ddd;
+            margin-right: -1px;  /* Prevent double border */
+        }
+        
+        /* Right cell (S53M) */
+        td > div.grid > div:last-child {
+            color: #2563eb;  /* Blue color for S53M values */
+        }
+        
+        /* Band columns - wider to accommodate split */
+        th:not(:first-child), 
+        td:not(:first-child) {
+            min-width: 160px;  /* Increased from 140px */
+            width: 160px;      /* Fixed width */
+        }
+        
+        /* Responsive adjustments */
+        @media (max-width: 1200px) {
+            th:not(:first-child), 
+            td:not(:first-child) {
+                min-width: 140px;
+                width: 140px;
+            }
+            
+            td > div.grid > div {
+                min-width: 50px;
+            }
         }
         
         /* Zone tooltip styles */
