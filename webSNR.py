@@ -138,7 +138,7 @@ def reformat_table(table):
         if table is None or table.empty:
             # Create zone_display with improved tooltip structure
             all_zones['zone_display'] = all_zones['zone'].apply(
-                lambda x: f'<div class="zone-tooltip" style="display: inline-block; width: 100%; cursor: help;" title="{zone_name_map.get(int(x), "Unknown Zone")}">{str(int(x)).zfill(2)}</div>'
+                lambda x: f'<div class="zone-tooltip" style="display: inline-block; width: 100%; text-align: center; cursor: help;" title="{zone_name_map.get(int(x), "Unknown Zone")}">{str(int(x)).zfill(2)}</div>'
             )
             for band in band_order:
                 all_zones[band] = ''
@@ -152,7 +152,7 @@ def reformat_table(table):
         
         # Create zone_display with improved tooltip structure
         flattened['zone_display'] = flattened['zone'].apply(
-            lambda x: f'<div class="zone-tooltip" style="display: inline-block; width: 100%; cursor: help;" title="{zone_name_map.get(int(x), "Unknown Zone")}">{str(int(x)).zfill(2)}</div>'
+            lambda x: f'<div class="zone-tooltip" style="display: inline-block; width: 100%; text-align: center; cursor: help;" title="{zone_name_map.get(int(x), "Unknown Zone")}">{str(int(x)).zfill(2)}</div>'
         )
         
         # Sort by zone and reset index
@@ -296,7 +296,7 @@ def snr_to_color(val, count):
         rgb_color = hsl_to_rgb(hue/360, sat, lightness)
         hex_color = '#{:02x}{:02x}{:02x}'.format(*[int(x * 255) for x in rgb_color])
             
-        return f'background-color: {hex_color}; padding: 1px 2px; font-size: 0.85rem;'
+        return f'background-color: {hex_color}; padding: 1px 2px; text-align: center; font-size: 0.85rem;'
     except ValueError:
         return 'background-color: #ffffff; padding: 1px 2px;'
 
