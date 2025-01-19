@@ -369,10 +369,10 @@ def combine_snr_count(mean_table_row, count_table, band, df, row_index):
 
             cell_html = f'''
             <div style="display: flex; width: 100%;">
-                <div style="flex: 1; text-align: center;"></div>
                 <div style="flex: 1; text-align: center;">
                     <span class="tooltip" data-tooltip-content="#{tooltip_id}">{display_text_with_arrow}</span>
                 </div>
+                <div style="flex: 1; text-align: center;"></div>
             </div>
             '''
             return cell_html, (tooltip_id, tooltip_content_html)
