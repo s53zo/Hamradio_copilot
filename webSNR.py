@@ -301,138 +301,77 @@ def snr_to_color(val, count):
         return 'background-color: #ffffff; padding: 1px 2px;'
 
 
-def combine_snr_count(mean_table_all_row, mean_table_s53m_row, count_table_all, count_table_s53m, band, df, df_s53m, row_index):
+def combine_snr_count(mean_table_row, count_table, band, df, row_index):
     """
-    Combines SNR and count data for both all spots and S53M spots with proper empty value handling.
+    Combines SNR and count data with proper empty value handling.
     """
     try:
-        zone = mean_table_all_row['zone']
+        zone = mean_table_row['zone']
         
-        # Process all spots data
-        snr_all = mean_table_all_row[band] if band in mean_table_all_row else None
-        if isinstance(snr_all, str) and snr_all.strip() == '':
-            snr_all = None
-        elif snr_all is not None:
+        # Handle SNR value - convert to float or None
+        snr = mean_table_row[band] if band in mean_table_row else None
+        if isinstance(snr, str) and snr.strip() == '':
+            snr = None
+        elif snr is not None:
             try:
-                snr_all = float(snr_all)
+                snr = float(snr)
             except (ValueError, TypeError):
-                snr_all = None
+                snr = None
         
-        count_all = count_table_all.at[row_index, band] if band in count_table_all.columns else 0
-        if pd.isna(count_all) or (isinstance(count_all, str) and count_all.strip() == ''):
-            count_all = 0
+        # Handle count value - convert to int or 0
+        count = count_table.at[row_index, band] if band in count_table.columns else 0
+        if pd.isna(count) or (isinstance(count, str) and count.strip() == ''):
+            count = 0
         else:
             try:
-                count_all = int(count_all)
+                count = int(count)
             except (ValueError, TypeError):
-                count_all = 0
-
-        # Process S53M spots data
-        snr_s53m = mean_table_s53m_row[band] if band in mean_table_s53m_row else None
-        if isinstance(snr_s53m, str) and snr_s53m.strip() == '':
-            snr_s53m = None
-        elif snr_s53m is not None:
-            try:
-                snr_s53m = float(snr_s53m)
-            except (ValueError, TypeError):
-                snr_s53m = None
-        
-        count_s53m = count_table_s53m.at[row_index, band] if band in count_table_s53m.columns else 0
-        if pd.isna(count_s53m) or (isinstance(count_s53m, str) and count_s53m.strip() == ''):
-            count_s53m = 0
-        else:
-            try:
-                count_s53m = int(count_s53m)
-            except (ValueError, TypeError):
-                count_s53m = 0
+                count = 0
 
         # Generate display text
-        if snr_all is None and count_all == 0:
-            display_text_all = "--"
-        elif snr_all is None:
-            display_text_all = f'N/A ({count_all})'
+        if snr is None and count == 0:
+            return "", None
+        elif snr is None:
+            display_text = f'N/A <span class="count-text">({count})</span>'
         else:
-            display_text_all = f'{int(round(snr_all))} ({count_all})'
+            display_text = f'{int(round(snr))} <span class="count-text">({count})</span>'
 
-        if snr_s53m is None and count_s53m == 0:
-            display_text_s53m = "--"
-        elif snr_s53m is None:
-            display_text_s53m = f'N/A ({count_s53m})'
+        # Compute slope and get arrow only if we have data
+        if snr is not None and count > 0:
+            slope = compute_slope(df, zone, band)
+            slope_arrow = slope_to_unicode(slope)
+
+            # Determine arrow color
+            if pd.isna(slope) or (-0.1 <= slope <= 0.1):
+                arrow_color = '#000000'  # black
+            elif slope > 0.1:
+                arrow_color = '#28a745'  # green
+            else:
+                arrow_color = '#dc3545'  # red
+
+            styled_arrow = f'<span style="font-size: 0.9rem; color: {arrow_color};">{slope_arrow}</span>'
+            display_text_with_arrow = f'{display_text} {styled_arrow}'
         else:
-            display_text_s53m = f'{int(round(snr_s53m))} ({count_s53m})'
+            display_text_with_arrow = display_text
 
-        # Add trend indicators
-        all_slope = None
-        s53m_slope = None
-
-        if snr_all is not None and count_all > 0:
-            all_slope = compute_slope(df, zone, band)
-            all_arrow = slope_to_unicode(all_slope)
-            # Create styled arrow span
-            arrow_color = 'black'
-            if not pd.isna(all_slope):
-                if all_slope > 0.3:
-                    arrow_color = '#28a745'  # strong increase
-                elif 0.1 < all_slope <= 0.3:
-                    arrow_color = '#28a745'  # slight increase
-                elif all_slope < -0.3:
-                    arrow_color = '#dc3545'  # strong decrease
-                elif -0.3 <= all_slope < -0.1:
-                    arrow_color = '#dc3545'  # slight decrease
+        # Get spotted stations only if we have data
+        if count > 0:
+            relevant_spots = df[(df['zone'] == zone) & (df['band'] == band)].copy()
+            unique_stations = sorted(set(relevant_spots['spotted_station']))
             
-            display_text_all = f'{display_text_all} <span style="color: {arrow_color};">{all_arrow}</span>'
-
-        if snr_s53m is not None and count_s53m > 0:
-            s53m_slope = compute_slope(df_s53m, zone, band)
-            s53m_arrow = slope_to_unicode(s53m_slope)
-            # Create styled arrow span
-            arrow_color = 'black'
-            if not pd.isna(s53m_slope):
-                if s53m_slope > 0.3:
-                    arrow_color = '#28a745'  # strong increase
-                elif 0.1 < s53m_slope <= 0.3:
-                    arrow_color = '#28a745'  # slight increase
-                elif s53m_slope < -0.3:
-                    arrow_color = '#dc3545'  # strong decrease
-                elif -0.3 <= s53m_slope < -0.1:
-                    arrow_color = '#dc3545'  # slight decrease
-            
-            display_text_s53m = f'{display_text_s53m} <span style="color: {arrow_color};">{s53m_arrow}</span>'
-
-        # Create tooltip content
-        tooltip_content = None
-        if count_all > 0 or count_s53m > 0:
             tooltip_id = f"tooltip_{row_index}_{band}"
+         
             tooltip_content_html = '<div class="station-list">'
-            
-            if count_all > 0:
-                tooltip_content_html += '<div style="font-weight: bold; margin-bottom: 4px;">All Spots:</div>'
-                relevant_spots = df[(df['zone'] == zone) & (df['band'] == band)].copy()
-                unique_stations = sorted(set(relevant_spots['spotted_station']))
-                for station in unique_stations:
-                    tooltip_content_html += f'<div>{html.escape(station)}</div>'
-            
-            if count_s53m > 0:
-                tooltip_content_html += '<div style="font-weight: bold; margin-top: 8px; margin-bottom: 4px;">S53M Spots:</div>'
-                relevant_spots = df_s53m[(df_s53m['zone'] == zone) & (df_s53m['band'] == band)].copy()
-                unique_stations = sorted(set(relevant_spots['spotted_station']))
-                for station in unique_stations:
-                    tooltip_content_html += f'<div>{html.escape(station)}</div>'
-            
+            for station in unique_stations:
+                display_station = station.replace('.', '/') #to avoid KH0.AA3B and have KH0/AA3B
+                tooltip_content_html += f'<div>{html.escape(display_station)}</div>'
             tooltip_content_html += '</div>'
-            tooltip_content = (tooltip_id, tooltip_content_html)
 
-        # Create the cell HTML with updated layout
-        cell_html = f'''
-        <div class="tooltip" data-tooltip-content="#{tooltip_id if tooltip_content else ''}">
-            <div class="grid">
-                <div>{display_text_all}</div>
-                <div>{display_text_s53m}</div>
-            </div>
-        </div>
-        '''
-
-        return cell_html.strip(), tooltip_content
+            cell_html = f'<span class="tooltip" data-tooltip-content="#{tooltip_id}">{display_text_with_arrow}</span>'
+            
+            return cell_html, (tooltip_id, tooltip_content_html)
+        else:
+            return display_text_with_arrow, None
 
     except Exception as e:
         print(f"Error processing zone {zone if 'zone' in locals() else 'unknown'} and band {band}: {str(e)}")
@@ -455,315 +394,145 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
     """
     Generates HTML template with improved tooltip styles.
     """
-    css_styles = """
-        /* Base styles */
-        body {
-            margin: 0;
-            padding: 4px;
-            font-family: 'Roboto', monospace;
-            font-size: 0.85rem;
-            background: #ffffff;
-            overflow-x: auto;
-        }
-        
-        /* Table styles */
-        table {
-            border-collapse: collapse;
-            width: 100%;
-            max-width: 1200px;
-            margin: 0 auto;
-            table-layout: auto;
-        }
-        
-        th {
-            position: sticky;
-            top: 0;
-            background-color: rgba(255, 255, 255, 0.95);
-            z-index: 10;
-            padding: 4px 8px;
-            font-size: 0.85rem;
-            border: 1px solid #ddd;
-            font-weight: bold;
-            text-align: center;
-            white-space: nowrap;
-        }
-        
-        td {
-            padding: 0;
-            border: 1px solid #ddd;
-            text-align: center;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        
-        /* Header subtext */
-        th span.subtext {
-            display: block;
-            font-size: 0.7rem;
-            color: #666;
-            font-weight: normal;
-            white-space: pre-line;
-        }
-        
-        /* Zone column */
-        td:first-child {
-            width: 45px;
-            min-width: 45px;
-            font-weight: bold;
-            cursor: help;
-            padding: 2px;
-        }
-        
-        /* Band columns */
-        th:not(:first-child), 
-        td:not(:first-child) {
-            min-width: 140px;
-        }
-        
-        /* Grid layout for cells */
-        td > div.grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            width: 100%;
-            height: 100%;
-            margin: 0;
-            padding: 0;
-            min-height: 28px;  /* Ensure consistent height */
-        }
-        
-        td > div.grid > div {
-            padding: 4px 2px;
-            text-align: center;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-width: 60px;  /* Minimum width for each half */
-            position: relative;  /* For border positioning */
-        }
-        
-        /* Left cell */
-        td > div.grid > div:first-child {
-            border-right: 1px solid #ddd;
-            margin-right: -1px;  /* Prevent double border */
-        }
-        
-        /* Right cell (S53M) */
-        td > div.grid > div:last-child {
-            color: #2563eb;  /* Blue color for S53M values */
-        }
-        
-        /* Band columns - wider to accommodate split */
-        th:not(:first-child), 
-        td:not(:first-child) {
-            min-width: 160px;  /* Increased from 140px */
-        }
-        
-        /* Responsive adjustments */
-        @media (max-width: 1200px) {
-            th:not(:first-child), 
-            td:not(:first-child) {
-                min-width: 140px;
-            }
-            
-            td > div.grid > div {
-                min-width: 50px;
-            }
-        }
-        
-        /* Zone tooltip styles */
-        .zone-tooltip {
-            padding: 1px 2px;
-            background-color: rgba(0, 0, 0, 0.02);
-            transition: background-color 0.2s;
-        }
-        
-        .zone-tooltip:hover {
-            background-color: rgba(0, 0, 0, 0.05);
-        }
-        
-        /* Tooltip styles */
-        .tooltip {
-            cursor: pointer;
-            display: block;
-            width: 100%;
-            height: 100%;
-            white-space: nowrap;
-        }
-        
-        .tippy-box[data-theme~='zone'] {
-            background-color: #333;
-            color: white;
-            font-size: 0.8rem;
-            line-height: 1.3;
-            max-width: none !important;
-            width: auto !important;
-        }
-        
-        .tippy-box[data-theme~='zone'] .tippy-content {
-            padding: 8px 12px;
-        }
-        
-        .tippy-box[data-theme~='zone'] .tippy-arrow {
-            color: #333;
-        }
-        
-        .tippy-content {
-            padding: 0 !important;
-            font-size: 0.8rem;
-            max-width: none !important;
-            width: auto !important;
-            background: white;
-        }
-        
-        /* Station list in tooltip */
-        .station-list {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-            gap: 4px;
-            padding: 8px;
-            background: #e4f0f3;
-            color: #333333;
-            max-width: 600px;
-        }
-        
-        .station-list div {
-            padding: 2px 4px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        
-        /* Hide tooltip templates */
-        .tooltip_templates {
-            display: none;
-        }
-        
-        /* Caption styles */
-        caption {
-            padding: 2px;
-            font-size: 0.85rem;
-            font-weight: bold;
-            margin-bottom: 8px;
-        }
-        
-        /* Utility classes */
-        .text-blue-600 {
-            color: #2563eb !important;
-        }
-        
-        .text-center {
-            text-align: center;
-        }
-        
-        /* Trend indicators */
-        .trend-up {
-            color: #28a745;
-        }
-        
-        .trend-down {
-            color: #dc3545;
-        }
-        
-        .trend-stable {
-            color: #000000;
-        }
-        
-        /* Footer styles */
-        .footer-text {
-            text-align: center;
-            margin-top: 20px;
-            font-size: 0.8rem;
-        }
-        
-        .footer-text a {
-            color: #2563eb;
-            text-decoration: none;
-        }
-        
-        .footer-text a:hover {
-            text-decoration: underline;
-        }
-        
-        /* Solar data panel */
-        .solar-panel {
-            position: fixed;
-            left: 5%;
-            padding: 10px;
-            z-index: 1000;
-            font-family: 'Roboto', monospace;
-            background: rgba(255, 255, 255, 0.95);
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        
-        /* Legend panel */
-        .legend {
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 80%;
-            background-color: rgba(255, 255, 255, 0.95);
-            padding: 15px;
-            border: 1px solid #ccc;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            z-index: 1000;
-            font-size: 0.85rem;
-        }
-        
-        /* Alternating row colors */
-        tr:nth-child(even) {
-            background-color: rgba(0, 0, 0, 0.02);
-        }
-        
-        /* Responsive design */
-        @media (min-width: 1400px) {
-            table {
-                max-width: 1400px;
-            }
-            
-            th:not(:first-child), 
-            td:not(:first-child) {
-                /* min-width: 160px; */
-                min-width: 200px;       /* or larger if needed */
-                white-space: nowrap;    /* ensures text does not wrap */
-            }
-        }
-        
-        @media (max-width: 1200px) {
-            table {
-                max-width: 1000px;
-            }
-            
-            th:not(:first-child), 
-            td:not(:first-child) {
-                min-width: 120px;
-            }
-        }
-        
-        @media (max-width: 768px) {
-            td > div.grid > div {
-                padding: 2px 4px;
-                font-size: 0.75rem;
-            }
-            
-            .station-list {
-                grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-            }
-        }
-    """
-
-    template = f"""<!DOCTYPE html>
+    template = f"""
+    <!DOCTYPE html>
     <html>
     <head>
         <meta charset="UTF-8">
         <meta http-equiv="refresh" content="60">
         <title>SNR Report</title>
         <style>
-        {css_styles}
+            body {{
+                margin: 0;
+                padding: 4px;
+                font-family: 'Roboto', monospace;
+                font-size: 0.85rem;
+                background: #ffffff;
+            }}
+    
+            table {{
+                border-collapse: collapse;
+                width: 100%;
+                max-width: 800px;
+                margin: 0 auto;
+                table-layout: fixed;
+            }}
+    
+            th {{
+                position: sticky;
+                top: 0;
+                background-color: rgba(255, 255, 255, 0.95);
+                z-index: 10;
+                padding: 2px;
+                font-size: 0.85rem;
+                border: 1px solid #ddd;
+                font-weight: bold;
+            }}
+    
+            td {{
+                padding: 1px 2px;
+                border: 1px solid #ddd;
+                text-align: center;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }}
+    
+            tr:nth-child(even) {{
+                background-color: rgba(0, 0, 0, 0.02);
+            }}
+    
+            td:first-child {{
+                width: 35px;
+                font-weight: bold;
+                cursor: help;
+                padding: 0;
+            }}
+
+            .zone-tooltip {{
+                padding: 1px 2px;
+                background-color: rgba(0, 0, 0, 0.02);
+                transition: background-color 0.2s;
+            }}
+
+            .zone-tooltip:hover {{
+                background-color: rgba(0, 0, 0, 0.05);
+            }}
+               
+            .tippy-box[data-theme~='zone'] {{
+                background-color: #333;
+                color: white;
+                font-size: 0.8rem;
+                line-height: 1.3;
+                max-width: none !important;
+                width: auto !important;
+            }}
+
+            .tippy-box[data-theme~='zone'] .tippy-content {{
+                padding: 8px 12px;
+            }}
+    
+            .tippy-box[data-theme~='zone'] .tippy-arrow {{
+                color: #333;
+            }}
+    
+            .tippy-content {{
+                padding: 0 !important;
+                font-size: 0.8rem;
+                max-width: none !important;
+                width: auto !important;
+                background: white;
+            }}
+
+            .tooltip {{
+                cursor: pointer;
+            }}
+
+            .station-list {{
+                display: inline-grid;
+                grid-template-columns: repeat(4, minmax(70px, max-content));
+                gap: 2px;
+                padding: 4px;
+                background: #e4f0f3;
+                color: #333333;
+                width: fit-content;
+                max-width: 100%;
+            }}
+
+            .station-list div {{
+                padding: 2px 4px;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }}
+    
+            .tooltip_templates {{
+                display: none;
+            }}
+    
+            caption {{
+                padding: 2px;
+                font-size: 0.85rem;
+                font-weight: bold;
+            }}
+
+            .count-text {{
+                font-size: 0.7rem;
+                color: #666;
+            }}
+
+            .legend {{
+                position: fixed;
+                bottom: 20px;
+                left: 20px;
+                right: 20px;
+                background: rgba(255, 255, 255, 0.95);
+                padding: 15px;
+                border-radius: 8px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                z-index: 1000;
+                text-align: center;
+            }}
         </style>
         <link rel="stylesheet" href="https://unpkg.com/tippy.js@6/animations/scale.css">
     </head>
@@ -782,7 +551,7 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
                     content(reference) {{
                         const id = reference.getAttribute('data-tooltip-content');
                         const template = document.querySelector(id);
-                        return template ? template.innerHTML : '';
+                        return template.innerHTML;
                     }},
                     allowHTML: true,
                     maxWidth: 'none',
@@ -794,23 +563,17 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
             }});
         </script>
     </body>
-    </html>"""
+    </html>
+    """
     return template
 
 def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False):
     # Connect to the SQLite database
     conn = sqlite3.connect('callsigns.db')
-    
-    # Modified query to get both all spots and S53M spots
+  
+    # Read data from the SQLite table `callsigns` into a pandas DataFrame
     query = """
-    SELECT 
-        zone, 
-        band, 
-        CAST(snr AS FLOAT) as snr, 
-        timestamp, 
-        spotter, 
-        spotted_station,
-        CASE WHEN spotter = 'S53M' THEN 1 ELSE 0 END as is_s53m
+    SELECT zone, band, CAST(snr AS FLOAT) as snr, timestamp, spotter, spotted_station
     FROM callsigns
     """
     
@@ -823,12 +586,11 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
                 'band': 'str',
                 'snr': 'float',
                 'spotter': 'str',
-                'spotted_station': 'str',
-                'is_s53m': 'int'
+                'spotted_station': 'str'
             }
         )
         
-        # Convert 'timestamp' from UNIX timestamp to datetime with UTC timezone
+        # Convert 'timestamp' from UNIX timestamp (seconds) to datetime with UTC timezone
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s', utc=True, errors='coerce')
     except Exception as e:
         print(f"Error: Unable to read data from the SQLite database. {e}")
@@ -836,22 +598,30 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
     finally:
         conn.close()
 
+    if debug:
+        print("Initial DataFrame:")
+        print(df.head())
+
     df = delete_old(df, span)
 
-    # Set categorical variables
+    if debug:
+        print(f"DataFrame after deleting entries older than {span} hours:")
+        print(df.head())
+
+    # Set 'zone' as a categorical variable with categories from 1 to 40
     df['zone'] = df['zone'].astype(int)
     df['zone'] = df['zone'].astype('category')
     df['zone'] = df['zone'].cat.set_categories(range(1, 41))
 
+    # Set 'band' as a categorical variable with desired order
     df['band'] = df['band'].astype(str)
     df['band'] = df['band'].astype('category')
     df['band'] = df['band'].cat.set_categories(band_order)
 
     all_zones = pd.Index(range(1, 41), name='zone')
 
-    # Create separate tables for all spots and S53M spots
-    # All spots count table
-    count_table_all = df.groupby(['zone', 'band'], observed=True).agg(
+    # Create count table
+    count_table = df.groupby(['zone', 'band'], observed=True).agg(
         count=('spotter', lambda x: len(set(zip(x, df.loc[x.index, 'spotted_station']))))
     ).reset_index().pivot(
         index='zone',
@@ -859,28 +629,8 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
         values='count'
     ).reindex(all_zones, fill_value=0)
 
-    # S53M spots count table
-    s53m_df = df[df['is_s53m'] == 1]
-    count_table_s53m = s53m_df.groupby(['zone', 'band'], observed=True).agg(
-        count=('spotter', lambda x: len(set(zip(x, s53m_df.loc[x.index, 'spotted_station']))))
-    ).reset_index().pivot(
-        index='zone',
-        columns='band',
-        values='count'
-    ).reindex(all_zones, fill_value=0)
-
-    # All spots mean table
-    mean_table_all = df.pivot_table(
-        values='snr',
-        index='zone',
-        columns='band',
-        aggfunc='median',
-        observed=True,
-        dropna=False
-    ).reindex(all_zones)
-
-    # S53M spots mean table
-    mean_table_s53m = s53m_df.pivot_table(
+    # Create mean table
+    mean_table = df.pivot_table(
         values='snr',
         index='zone',
         columns='band',
@@ -890,22 +640,17 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
     ).reindex(all_zones)
 
     # Convert numeric columns to float
-    for table in [mean_table_all, mean_table_s53m]:
-        numeric_columns = table.select_dtypes(include=['number']).columns
-        table[numeric_columns] = table[numeric_columns].astype('float')
+    numeric_columns = mean_table.select_dtypes(include=['number']).columns
+    mean_table[numeric_columns] = mean_table[numeric_columns].astype('float')
 
-    # Ensure all tables have the same index
-    all_zones = sorted(set(count_table_all.index) | set(mean_table_all.index))
-    count_table_all = count_table_all.reindex(all_zones, fill_value=0)
-    count_table_s53m = count_table_s53m.reindex(all_zones, fill_value=0)
-    mean_table_all = mean_table_all.reindex(all_zones)
-    mean_table_s53m = mean_table_s53m.reindex(all_zones)
+    # Ensure both tables have the same index
+    all_zones = sorted(set(count_table.index) | set(mean_table.index))
+    count_table = count_table.reindex(all_zones, fill_value=0)
+    mean_table = mean_table.reindex(all_zones)
 
     # Reformat the tables
-    count_table_all = reformat_table(count_table_all)
-    count_table_s53m = reformat_table(count_table_s53m)
-    mean_table_all = reformat_table(mean_table_all)
-    mean_table_s53m = reformat_table(mean_table_s53m)
+    count_table = reformat_table(count_table)
+    mean_table = reformat_table(mean_table)
 
     if debug:
         print("Count Table:")
@@ -916,45 +661,34 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
     now = dt.datetime.now(dt.timezone.utc).strftime("%b %d, %Y %H:%M")
     caption_string = f"Last {int(span*60)} minutes SNR of spots in S5 and around - refresh at {now} GMT"
 
-    # Initialize combined table from mean_table_all
-    combined_table = mean_table_all.copy()
+    # Combine mean_table and count_table into a single table with desired cell content
+    combined_table = mean_table.copy()
     
     # Tooltip content list
     tooltip_contents = []
 
     # Create color mapping for each cell
-    color_styles = pd.DataFrame('', index=mean_table_all.index, columns=mean_table_all.columns)
+    color_styles = pd.DataFrame('', index=mean_table.index, columns=mean_table.columns)
     
     # Iterate through bands and create combined display and colors
     for band in band_order:
-        if band in mean_table_all.columns:
+        if band in mean_table.columns:
             combined_results = []
-            for idx, row in mean_table_all.iterrows():
-                # Get corresponding S53M row
-                s53m_row = mean_table_s53m.iloc[idx]
+            for idx, row in mean_table.iterrows():
+                # Get SNR value and count
+                snr = row[band] if band in row else None
+                count = count_table.at[idx, band] if band in count_table.columns else 0
                 
-                # Combine SNR and count display for both all spots and S53M spots
-                result = combine_snr_count(
-                    row,
-                    s53m_row,
-                    count_table_all,
-                    count_table_s53m,
-                    band,
-                    df,
-                    s53m_df,
-                    idx
-                )
-                combined_results.append(result)
-
-                # Get counts for color styling
-                count = count_table_all.at[idx, band] if band in count_table_all.columns else 0
                 try:
                     count = int(count) if count != '' else 0
-                    snr = row[band] if band in row else None
                     if not pd.isna(snr) and count > 0:
                         color_styles.at[idx, band] = snr_to_color(snr, count)
                 except (ValueError, TypeError):
-                    pass
+                    count = 0
+                
+                # Combine SNR and count display
+                result = combine_snr_count(row, count_table, band, df, idx)
+                combined_results.append(result)
             
             combined_table[band] = [result[0] for result in combined_results]
             tooltip_contents.extend([content for _, content in combined_results if content])
@@ -962,9 +696,9 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
             combined_table[band] = ' '
 
     # Handle 'zone' column separately
-    if 'zone' in combined_table.columns and 'zone' in mean_table_all.columns:
-        combined_table['zone'] = mean_table_all['zone']
-        combined_table['zone_display'] = mean_table_all['zone_display']
+    if 'zone' in combined_table.columns and 'zone' in mean_table.columns:
+        combined_table['zone'] = mean_table['zone']
+        combined_table['zone_display'] = mean_table['zone_display']
 
     # Ensure the columns are ordered as per band_order
     combined_table = combined_table[['zone_display'] + band_order]
@@ -992,8 +726,7 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
             ('background-color', 'rgba(255, 255, 255, 0.95)'),
             ('z-index', '1'),
             ('font-weight', 'bold'),
-            ('white-space', 'nowrap'),
-            ('text-align', 'center')  # Center align the headers
+            ('white-space', 'nowrap')
         ]},
         {'selector': 'td', 'props': [
             ('padding', '1px 2px'),
@@ -1007,24 +740,11 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
         ]}
     ])
 
-    # Create the band headers with sub-text
-    band_headers = {
-        'zone': 'Zone',
-        '160': '160m\nAll / S53M',
-        '80': '80m\nAll / S53M',
-        '40': '40m\nAll / S53M',
-        '20': '20m\nAll / S53M',
-        '15': '15m\nAll / S53M',
-        '10': '10m\nAll / S53M'
-    }
-    
-    styled_table.columns = band_headers
-
     # Convert to HTML
     html_table = styled_table.hide(axis="index").to_html()
     html_table = html_table.replace(
         '<table ',
-        '<table style="width: 100%; margin: 0 auto; table-layout: auto;" '
+        '<table style="width: 100%; max-width: 800px; margin: 0 auto; table-layout: fixed;" '
     )
 
     # Build tooltip content HTML
