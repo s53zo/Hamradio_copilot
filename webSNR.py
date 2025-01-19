@@ -1026,7 +1026,7 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
     html_table = styled_table.hide(axis="index").to_html()
     html_table = html_table.replace(
         '<table ',
-        '<table style="width: 100%; max-width: 1000px; margin: 0 auto; table-layout: fixed;" '
+        '<table style="width: 100%; max-width: 1300px; margin: 0 auto; table-layout: auto;" '
     )
 
     # Build tooltip content HTML
