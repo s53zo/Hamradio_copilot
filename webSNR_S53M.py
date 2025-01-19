@@ -659,7 +659,7 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
         print(mean_table.head())
 
     now = dt.datetime.now(dt.timezone.utc).strftime("%b %d, %Y %H:%M")
-    caption_string = f"Last {int(span*60)} minutes SNR of spots in S5 and around - refresh at {now} GMT"
+    caption_string = f"Last {int(span*60)} minutes SNR of spots heard at S53M - refresh at {now} GMT"
 
     # Combine mean_table and count_table into a single table with desired cell content
     combined_table = mean_table.copy()
