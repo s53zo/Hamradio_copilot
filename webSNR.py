@@ -557,7 +557,6 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
         th:not(:first-child), 
         td:not(:first-child) {
             min-width: 160px;  /* Increased from 140px */
-            width: 160px;      /* Fixed width */
         }
         
         /* Responsive adjustments */
@@ -565,7 +564,6 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
             th:not(:first-child), 
             td:not(:first-child) {
                 min-width: 140px;
-                width: 140px;
             }
             
             td > div.grid > div {
