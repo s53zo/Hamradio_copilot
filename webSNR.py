@@ -346,7 +346,7 @@ def combine_snr_count(mean_table_all_row, mean_table_s53m_row, count_table_all, 
             except (ValueError, TypeError):
                 count_s53m = 0
 
-        # Generate display text for all spots
+        # Generate display text
         if snr_all is None and count_all == 0:
             display_text_all = "--"
         elif snr_all is None:
@@ -354,7 +354,6 @@ def combine_snr_count(mean_table_all_row, mean_table_s53m_row, count_table_all, 
         else:
             display_text_all = f'{int(round(snr_all))} ({count_all})'
 
-        # Generate display text for S53M spots
         if snr_s53m is None and count_s53m == 0:
             display_text_s53m = "--"
         elif snr_s53m is None:
@@ -362,71 +361,73 @@ def combine_snr_count(mean_table_all_row, mean_table_s53m_row, count_table_all, 
         else:
             display_text_s53m = f'{int(round(snr_s53m))} ({count_s53m})'
 
-        # Add trend indicators if we have data
+        # Add trend indicators
         all_slope = None
         s53m_slope = None
 
         if snr_all is not None and count_all > 0:
             all_slope = compute_slope(df, zone, band)
             all_arrow = slope_to_unicode(all_slope)
-            display_text_all = f'{display_text_all} {all_arrow}'
+            # Create styled arrow span
+            arrow_color = 'black'
+            if not pd.isna(all_slope):
+                if all_slope > 0.3:
+                    arrow_color = '#28a745'  # strong increase
+                elif 0.1 < all_slope <= 0.3:
+                    arrow_color = '#28a745'  # slight increase
+                elif all_slope < -0.3:
+                    arrow_color = '#dc3545'  # strong decrease
+                elif -0.3 <= all_slope < -0.1:
+                    arrow_color = '#dc3545'  # slight decrease
+            
+            display_text_all = f'{display_text_all} <span style="color: {arrow_color};">{all_arrow}</span>'
 
         if snr_s53m is not None and count_s53m > 0:
             s53m_slope = compute_slope(df_s53m, zone, band)
             s53m_arrow = slope_to_unicode(s53m_slope)
-            display_text_s53m = f'{display_text_s53m} {s53m_arrow}'
+            # Create styled arrow span
+            arrow_color = 'black'
+            if not pd.isna(s53m_slope):
+                if s53m_slope > 0.3:
+                    arrow_color = '#28a745'  # strong increase
+                elif 0.1 < s53m_slope <= 0.3:
+                    arrow_color = '#28a745'  # slight increase
+                elif s53m_slope < -0.3:
+                    arrow_color = '#dc3545'  # strong decrease
+                elif -0.3 <= s53m_slope < -0.1:
+                    arrow_color = '#dc3545'  # slight decrease
+            
+            display_text_s53m = f'{display_text_s53m} <span style="color: {arrow_color};">{s53m_arrow}</span>'
 
-        # Determine arrow colors
-        if all_slope is not None:
-            if pd.isna(all_slope) or (-0.1 <= all_slope <= 0.1):
-                all_arrow_color = '#000000'  # black
-            elif all_slope > 0.1:
-                all_arrow_color = '#28a745'  # green
-            else:
-                all_arrow_color = '#dc3545'  # red
-        
-        if s53m_slope is not None:
-            if pd.isna(s53m_slope) or (-0.1 <= s53m_slope <= 0.1):
-                s53m_arrow_color = '#000000'  # black
-            elif s53m_slope > 0.1:
-                s53m_arrow_color = '#28a745'  # green
-            else:
-                s53m_arrow_color = '#dc3545'  # red
-
-        # Create tooltip content if we have data
+        # Create tooltip content
         tooltip_content = None
         if count_all > 0 or count_s53m > 0:
             tooltip_id = f"tooltip_{row_index}_{band}"
-            
             tooltip_content_html = '<div class="station-list">'
             
-            # Add all spots
             if count_all > 0:
                 tooltip_content_html += '<div style="font-weight: bold; margin-bottom: 4px;">All Spots:</div>'
                 relevant_spots = df[(df['zone'] == zone) & (df['band'] == band)].copy()
                 unique_stations = sorted(set(relevant_spots['spotted_station']))
                 for station in unique_stations:
-                    display_station = station.replace('.', '/')
-                    tooltip_content_html += f'<div>{html.escape(display_station)}</div>'
+                    tooltip_content_html += f'<div>{html.escape(station)}</div>'
             
-            # Add S53M spots
             if count_s53m > 0:
                 tooltip_content_html += '<div style="font-weight: bold; margin-top: 8px; margin-bottom: 4px;">S53M Spots:</div>'
                 relevant_spots = df_s53m[(df_s53m['zone'] == zone) & (df_s53m['band'] == band)].copy()
                 unique_stations = sorted(set(relevant_spots['spotted_station']))
                 for station in unique_stations:
-                    display_station = station.replace('.', '/')
-                    tooltip_content_html += f'<div>{html.escape(display_station)}</div>'
+                    tooltip_content_html += f'<div>{html.escape(station)}</div>'
             
             tooltip_content_html += '</div>'
             tooltip_content = (tooltip_id, tooltip_content_html)
 
-        # Create the split cell HTML
+        # Create the cell HTML with updated layout
         cell_html = f'''
         <div class="tooltip" data-tooltip-content="#{tooltip_id if tooltip_content else ''}">
-            <div class="grid grid-cols-2">
-                <div class="p-2 text-center border-r">{display_text_all}</div>
-                <div class="p-2 text-center text-blue-600">{display_text_s53m}</div>
+            <div class="grid">
+                <div class="all-spots">{display_text_all}</div>
+                <div class="s53m-spots text-blue-600">{display_text_s53m}</div>
             </div>
         </div>
         '''
@@ -462,207 +463,275 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
         <meta http-equiv="refresh" content="60">
         <title>SNR Report</title>
         <style>
-            body {{
-                margin: 0;
-                padding: 4px;
-                font-family: 'Roboto', monospace;
-                font-size: 0.85rem;
-                background: #ffffff;
-            }}
-
-            table {{
-                border-collapse: collapse;
-                width: 100%;
-                max-width: 800px;
-                margin: 0 auto;
-                table-layout: fixed;
-            }}
-
-            th {{
-                position: sticky;
-                top: 0;
-                background-color: rgba(255, 255, 255, 0.95);
-                z-index: 10;
-                padding: 2px;
-                font-size: 0.85rem;
-                border: 1px solid #ddd;
-                font-weight: bold;
-            }}
-
-            th span.subtext {{
-                display: block;
-                font-size: 0.7rem;
-                color: #666;
-                font-weight: normal;
-                white-space: pre-line;
-            }}
-
-            td {{
-                padding: 0;
-                border: 1px solid #ddd;
-                text-align: center;
-                white-space: nowrap;
-                overflow: hidden;
-                text-overflow: ellipsis;
-            }}
-
-            tr:nth-child(even) {{
-                background-color: rgba(0, 0, 0, 0.02);
-            }}
-
-            td:first-child {{
-                width: 35px;
-                font-weight: bold;
-                cursor: help;
-                padding: 2px;
-            }}
-
-            .zone-tooltip {{
-                padding: 1px 2px;
-                background-color: rgba(0, 0, 0, 0.02);
-                transition: background-color 0.2s;
-            }}
-
-            .zone-tooltip:hover {{
-                background-color: rgba(0, 0, 0, 0.05);
-            }}
-
-            td > div.grid {{
-                display: grid;
-                grid-template-columns: 1fr 1fr;
-                width: 100%;
-                height: 100%;
-                margin: 0;
-                padding: 0;
-            }}
-
-            td > div.grid > div {{
-                padding: 2px;
-                text-align: center;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            }}
-
-            td > div.grid > div:first-child {{
-                border-right: 1px solid #ddd;
-            }}
-
-            /* Remove background colors from cells */
-            td[class*="col"] {{
-                background-color: transparent !important;
-            }}
-
-            .tippy-box[data-theme~='zone'] {{
-                background-color: #333;
-                color: white;
-                font-size: 0.8rem;
-                line-height: 1.3;
-                max-width: none !important;
-                width: auto !important;
-            }}
-
-            .tippy-box[data-theme~='zone'] .tippy-content {{
-                padding: 8px 12px;
-            }}
-
-            .tippy-box[data-theme~='zone'] .tippy-arrow {{
-                color: #333;
-            }}
-
-            .tippy-content {{
-                padding: 0 !important;
-                font-size: 0.8rem;
-                max-width: none !important;
-                width: auto !important;
-                background: white;
-            }}
-
-            .tooltip {{
-                cursor: pointer;
-                display: block;
-                width: 100%;
-                height: 100%;
-            }}
-
-            .station-list {{
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-                gap: 4px;
-                padding: 8px;
-                background: #e4f0f3;
-                color: #333333;
-                max-width: 600px;
-            }}
-
-            .station-list div {{
-                padding: 2px 4px;
-                white-space: nowrap;
-                overflow: hidden;
-                text-overflow: ellipsis;
-            }}
-
-            .tooltip_templates {{
-                display: none;
-            }}
-
-            caption {{
-                padding: 2px;
-                font-size: 0.85rem;
-                font-weight: bold;
-            }}
-
-            .text-blue-600 {{
-                color: #2563eb !important;
-            }}
-
-            .count-text {{
-                font-size: 0.7rem;
-                color: #666;
-            }}
-
-            .text-center {{
-                text-align: center;
-            }}
-
-            .trend-up {{
-                color: #28a745;
-            }}
-
-            .trend-down {{
-                color: #dc3545;
-            }}
-
-            .trend-stable {{
-                color: #000000;
-            }}
-
-            .legend {{
-                position: fixed;
-                bottom: 20px;
-                left: 20px;
-                right: 20px;
-                background: rgba(255, 255, 255, 0.95);
-                padding: 15px;
-                border-radius: 8px;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-                z-index: 1000;
-                text-align: center;
-            }}
-
-            @media (max-width: 768px) {{
-                table {{
-                    font-size: 0.75rem;
-                }}
-                
-                td > div.grid > div {{
-                    padding: 1px;
-                }}
-                
-                .station-list {{
-                    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-                }}
-            }}
+          /* Base styles */
+          body {
+              margin: 0;
+              padding: 4px;
+              font-family: 'Roboto', monospace;
+              font-size: 0.85rem;
+              background: #ffffff;
+              overflow-x: auto;
+          }
+          
+          /* Table styles */
+          table {
+              border-collapse: collapse;
+              width: 100%;
+              max-width: 1200px;
+              margin: 0 auto;
+              table-layout: fixed;
+          }
+          
+          th {
+              position: sticky;
+              top: 0;
+              background-color: rgba(255, 255, 255, 0.95);
+              z-index: 10;
+              padding: 4px 8px;
+              font-size: 0.85rem;
+              border: 1px solid #ddd;
+              font-weight: bold;
+              text-align: center;
+              white-space: nowrap;
+          }
+          
+          td {
+              padding: 0;
+              border: 1px solid #ddd;
+              text-align: center;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+          }
+          
+          /* Header subtext */
+          th span.subtext {
+              display: block;
+              font-size: 0.7rem;
+              color: #666;
+              font-weight: normal;
+              white-space: pre-line;
+          }
+          
+          /* Zone column */
+          td:first-child {
+              width: 45px;
+              min-width: 45px;
+              font-weight: bold;
+              cursor: help;
+              padding: 2px;
+          }
+          
+          /* Band columns */
+          th:not(:first-child), 
+          td:not(:first-child) {
+              min-width: 140px;
+          }
+          
+          /* Grid layout for cells */
+          td > div.grid {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              width: 100%;
+              height: 100%;
+              margin: 0;
+              padding: 0;
+          }
+          
+          td > div.grid > div {
+              padding: 4px 8px;
+              text-align: center;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              min-width: 80px;
+          }
+          
+          td > div.grid > div:first-child {
+              border-right: 1px solid #ddd;
+          }
+          
+          /* Zone tooltip styles */
+          .zone-tooltip {
+              padding: 1px 2px;
+              background-color: rgba(0, 0, 0, 0.02);
+              transition: background-color 0.2s;
+          }
+          
+          .zone-tooltip:hover {
+              background-color: rgba(0, 0, 0, 0.05);
+          }
+          
+          /* Tooltip styles */
+          .tooltip {
+              cursor: pointer;
+              display: block;
+              width: 100%;
+              height: 100%;
+              white-space: nowrap;
+          }
+          
+          .tippy-box[data-theme~='zone'] {
+              background-color: #333;
+              color: white;
+              font-size: 0.8rem;
+              line-height: 1.3;
+              max-width: none !important;
+              width: auto !important;
+          }
+          
+          .tippy-box[data-theme~='zone'] .tippy-content {
+              padding: 8px 12px;
+          }
+          
+          .tippy-box[data-theme~='zone'] .tippy-arrow {
+              color: #333;
+          }
+          
+          .tippy-content {
+              padding: 0 !important;
+              font-size: 0.8rem;
+              max-width: none !important;
+              width: auto !important;
+              background: white;
+          }
+          
+          /* Station list in tooltip */
+          .station-list {
+              display: grid;
+              grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+              gap: 4px;
+              padding: 8px;
+              background: #e4f0f3;
+              color: #333333;
+              max-width: 600px;
+          }
+          
+          .station-list div {
+              padding: 2px 4px;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+          }
+          
+          /* Hide tooltip templates */
+          .tooltip_templates {
+              display: none;
+          }
+          
+          /* Caption styles */
+          caption {
+              padding: 2px;
+              font-size: 0.85rem;
+              font-weight: bold;
+              margin-bottom: 8px;
+          }
+          
+          /* Utility classes */
+          .text-blue-600 {
+              color: #2563eb !important;
+          }
+          
+          .text-center {
+              text-align: center;
+          }
+          
+          /* Trend indicators */
+          .trend-up {
+              color: #28a745;
+          }
+          
+          .trend-down {
+              color: #dc3545;
+          }
+          
+          .trend-stable {
+              color: #000000;
+          }
+          
+          /* Footer styles */
+          .footer-text {
+              text-align: center;
+              margin-top: 20px;
+              font-size: 0.8rem;
+          }
+          
+          .footer-text a {
+              color: #2563eb;
+              text-decoration: none;
+          }
+          
+          .footer-text a:hover {
+              text-decoration: underline;
+          }
+          
+          /* Solar data panel */
+          .solar-panel {
+              position: fixed;
+              left: 5%;
+              padding: 10px;
+              z-index: 1000;
+              font-family: 'Roboto', monospace;
+              background: rgba(255, 255, 255, 0.95);
+              border: 1px solid #ddd;
+              border-radius: 4px;
+              box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+          }
+          
+          /* Legend panel */
+          .legend {
+              position: fixed;
+              bottom: 20px;
+              left: 50%;
+              transform: translateX(-50%);
+              width: 80%;
+              background-color: rgba(255, 255, 255, 0.95);
+              padding: 15px;
+              border: 1px solid #ccc;
+              border-radius: 8px;
+              box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+              z-index: 1000;
+              font-size: 0.85rem;
+          }
+          
+          /* Alternating row colors */
+          tr:nth-child(even) {
+              background-color: rgba(0, 0, 0, 0.02);
+          }
+          
+          /* Responsive design */
+          @media (min-width: 1400px) {
+              table {
+                  max-width: 1400px;
+              }
+              
+              th:not(:first-child), 
+              td:not(:first-child) {
+                  min-width: 160px;
+              }
+          }
+          
+          @media (max-width: 1200px) {
+              table {
+                  max-width: 1000px;
+              }
+              
+              th:not(:first-child), 
+              td:not(:first-child) {
+                  min-width: 120px;
+              }
+          }
+          
+          @media (max-width: 768px) {
+              td > div.grid > div {
+                  padding: 2px 4px;
+                  font-size: 0.75rem;
+              }
+              
+              .station-list {
+                  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+              }
+          }
         </style>
         <link rel="stylesheet" href="https://unpkg.com/tippy.js@6/animations/scale.css">
     </head>
