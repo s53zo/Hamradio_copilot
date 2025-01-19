@@ -729,7 +729,9 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
             
             th:not(:first-child), 
             td:not(:first-child) {
-                min-width: 160px;
+                /* min-width: 160px; */
+                min-width: 200px;       /* or larger if needed */
+                white-space: nowrap;    /* ensures text does not wrap */
             }
         }
         
