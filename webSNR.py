@@ -426,8 +426,8 @@ def combine_snr_count(mean_table_all_row, mean_table_s53m_row, count_table_all, 
         cell_html = f'''
         <div class="tooltip" data-tooltip-content="#{tooltip_id if tooltip_content else ''}">
             <div class="grid">
-                <div class="all-spots">{display_text_all}</div>
-                <div class="s53m-spots text-blue-600">{display_text_s53m}</div>
+                <div>{display_text_all}</div>
+                <div>{display_text_s53m}</div>
             </div>
         </div>
         '''
