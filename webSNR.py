@@ -369,10 +369,10 @@ def combine_snr_count(mean_table_row, count_table, band, df, row_index):
 
             cell_html = f'''
             <div style="display: flex; width: 100%;">
+                <div style="flex: 1; text-align: center;"></div>
                 <div style="flex: 1; text-align: center;">
                     <span class="tooltip" data-tooltip-content="#{tooltip_id}">{display_text_with_arrow}</span>
                 </div>
-                <div style="flex: 1; text-align: center;"></div>
             </div>
             '''
             return cell_html, (tooltip_id, tooltip_content_html)
@@ -431,7 +431,7 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
             table {{
                 border-collapse: collapse;
                 width: 100%;
-                max-width: 800px;
+                max-width: 1200px;
                 margin: 0 auto;
                 table-layout: fixed;
             }}
@@ -635,6 +635,7 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
     query = """
     SELECT zone, band, CAST(snr AS FLOAT) as snr, timestamp, spotter, spotted_station
     FROM callsigns
+    WHERE spotter = 'S53M'
     """
     
     try:
