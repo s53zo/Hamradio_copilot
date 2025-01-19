@@ -367,11 +367,22 @@ def combine_snr_count(mean_table_row, count_table, band, df, row_index):
                 tooltip_content_html += f'<div>{html.escape(display_station)}</div>'
             tooltip_content_html += '</div>'
 
-            cell_html = f'<span class="tooltip" data-tooltip-content="#{tooltip_id}">{display_text_with_arrow}</span>'
-            
+            cell_html = f'''
+            <div style="display: flex; width: 100%;">
+                <div style="flex: 1; text-align: center;">
+                    <span class="tooltip" data-tooltip-content="#{tooltip_id}">{display_text_with_arrow}</span>
+                </div>
+                <div style="flex: 1; text-align: center;"></div>
+            </div>
+            '''
             return cell_html, (tooltip_id, tooltip_content_html)
         else:
-            return display_text_with_arrow, None
+            return f'''
+            <div style="display: flex; width: 100%;">
+                <div style="flex: 1; text-align: center;">{display_text_with_arrow}</div>
+                <div style="flex: 1; text-align: center;"></div>
+            </div>
+            ''', None
 
     except Exception as e:
         print(f"Error processing zone {zone if 'zone' in locals() else 'unknown'} and band {band}: {str(e)}")
