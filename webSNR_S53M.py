@@ -296,7 +296,7 @@ def snr_to_color(val, count):
         rgb_color = hsl_to_rgb(hue/360, sat, lightness)
         hex_color = '#{:02x}{:02x}{:02x}'.format(*[int(x * 255) for x in rgb_color])
             
-        return f'background-color: {hex_color}; padding: 1px 2px; font-size: 0.85rem;'
+        return f'background-color: {hex_color}; padding: 1px 2px; text-align: center; font-size: 0.85rem;'
     except ValueError:
         return 'background-color: #ffffff; padding: 1px 2px;'
 
