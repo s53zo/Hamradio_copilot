@@ -30,7 +30,7 @@ parser.add_argument("-u", "--upper",
                     type=int, default=10)
 parser.add_argument("-r", "--range", type=float, default=0.25,
                     help="Specify # of hours of data from current time to analyze. Default = 0.25")
-parser.add_argument("-o", "--output-folder", help="Specify the local folder to save the index.html file.",
+parser.add_argument("-o", "--output-folder", help="Specify the local folder to save the index_s53m.html file.",
                     default="local_html")
 parser.add_argument("--use-s3", action="store_true", help="Enable uploading to S3")
 parser.add_argument("-d", "--debug", action="store_true", help="Enable debugging output")
@@ -111,7 +111,7 @@ def upload_file_to_s3(file_name, bucket_name, acc_key, sec_key):
         'aws_secret_access_key': sec_key
     }
     s3_client = boto3.client('s3', **creds)
-    obj_name = 'index.html'
+    obj_name = 'index_s53m.html'
 
     try:
         s3_client.upload_file(file_name, bucket_name, obj_name, ExtraArgs={'ContentType':'text/html; charset=utf-8'})
@@ -138,7 +138,7 @@ def reformat_table(table):
         if table is None or table.empty:
             # Create zone_display with improved tooltip structure
             all_zones['zone_display'] = all_zones['zone'].apply(
-                lambda x: f'<div class="zone-tooltip" style="display: inline-block; text-align: center; width: 100%; cursor: help;" title="{zone_name_map.get(int(x), "Unknown Zone")}">{str(int(x)).zfill(2)}</div>'
+                lambda x: f'<div class="zone-tooltip" style="display: inline-block; width: 100%; text-align: center; cursor: help;" title="{zone_name_map.get(int(x), "Unknown Zone")}">{str(int(x)).zfill(2)}</div>'
             )
             for band in band_order:
                 all_zones[band] = ''
@@ -367,22 +367,11 @@ def combine_snr_count(mean_table_row, count_table, band, df, row_index):
                 tooltip_content_html += f'<div>{html.escape(display_station)}</div>'
             tooltip_content_html += '</div>'
 
-            cell_html = f'''
-            <div style="display: flex; width: 100%;">
-                <div style="flex: 1; text-align: center;">
-                    <span class="tooltip" data-tooltip-content="#{tooltip_id}">{display_text_with_arrow}</span>
-                </div>
-                <div style="flex: 1; text-align: center;"></div>
-            </div>
-            '''
+            cell_html = f'<span class="tooltip" data-tooltip-content="#{tooltip_id}">{display_text_with_arrow}</span>'
+            
             return cell_html, (tooltip_id, tooltip_content_html)
         else:
-            return f'''
-            <div style="display: flex; width: 100%;">
-                <div style="flex: 1; text-align: center;">{display_text_with_arrow}</div>
-                <div style="flex: 1; text-align: center;"></div>
-            </div>
-            ''', None
+            return display_text_with_arrow, None
 
     except Exception as e:
         print(f"Error processing zone {zone if 'zone' in locals() else 'unknown'} and band {band}: {str(e)}")
@@ -420,26 +409,13 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
                 font-size: 0.85rem;
                 background: #ffffff;
             }}
-            
-            @media (max-width: 768px) {{
-                body {{
-                    padding: 2px;
-                    font-size: 0.75rem;
-                }}
-            }}
     
             table {{
                 border-collapse: collapse;
                 width: 100%;
-                max-width: 1200px;
+                max-width: 800px;
                 margin: 0 auto;
                 table-layout: fixed;
-            }}
-            
-            @media (max-width: 768px) {{
-                table {{
-                    max-width: 100%;
-                }}
             }}
     
             th {{
@@ -452,13 +428,6 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
                 border: 1px solid #ddd;
                 font-weight: bold;
             }}
-            
-            @media (max-width: 768px) {{
-                th {{
-                    font-size: 0.75rem;
-                    padding: 1px;
-                }}
-            }}
     
             td {{
                 padding: 1px 2px;
@@ -467,12 +436,6 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
                 white-space: nowrap;
                 overflow: hidden;
                 text-overflow: ellipsis;
-            }}
-            
-            @media (max-width: 768px) {{
-                td {{
-                    padding: 1px;
-                }}
             }}
     
             tr:nth-child(even) {{
@@ -485,16 +448,9 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
                 cursor: help;
                 padding: 0;
             }}
-            
-            @media (max-width: 768px) {{
-                td:first-child {{
-                    width: 30px;
-                }}
-            }}
 
             .zone-tooltip {{
                 padding: 1px 2px;
-                text-align: center;
                 background-color: rgba(0, 0, 0, 0.02);
                 transition: background-color 0.2s;
             }}
@@ -510,18 +466,10 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
                 line-height: 1.3;
                 max-width: none !important;
                 width: auto !important;
-                border-radius: 4px;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.15);
             }}
 
             .tippy-box[data-theme~='zone'] .tippy-content {{
                 padding: 8px 12px;
-            }}
-            
-            @media (max-width: 768px) {{
-                .tippy-box[data-theme~='zone'] {{
-                    font-size: 0.7rem;
-                }}
             }}
     
             .tippy-box[data-theme~='zone'] .tippy-arrow {{
@@ -549,7 +497,6 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
                 color: #333333;
                 width: fit-content;
                 max-width: 100%;
-                border-radius: 4px;
             }}
 
             .station-list div {{
@@ -557,14 +504,6 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
                 white-space: nowrap;
                 overflow: hidden;
                 text-overflow: ellipsis;
-                background: rgba(255,255,255,0.8);
-                border-radius: 2px;
-            }}
-            
-            @media (max-width: 768px) {{
-                .station-list {{
-                    grid-template-columns: repeat(3, minmax(60px, max-content));
-                }}
             }}
     
             .tooltip_templates {{
