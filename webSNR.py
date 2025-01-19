@@ -455,283 +455,286 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
     """
     Generates HTML template with improved tooltip styles.
     """
-    template = f"""
-    <!DOCTYPE html>
+    css_styles = """
+        /* Base styles */
+        body {
+            margin: 0;
+            padding: 4px;
+            font-family: 'Roboto', monospace;
+            font-size: 0.85rem;
+            background: #ffffff;
+            overflow-x: auto;
+        }
+        
+        /* Table styles */
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+            table-layout: fixed;
+        }
+        
+        th {
+            position: sticky;
+            top: 0;
+            background-color: rgba(255, 255, 255, 0.95);
+            z-index: 10;
+            padding: 4px 8px;
+            font-size: 0.85rem;
+            border: 1px solid #ddd;
+            font-weight: bold;
+            text-align: center;
+            white-space: nowrap;
+        }
+        
+        td {
+            padding: 0;
+            border: 1px solid #ddd;
+            text-align: center;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        /* Header subtext */
+        th span.subtext {
+            display: block;
+            font-size: 0.7rem;
+            color: #666;
+            font-weight: normal;
+            white-space: pre-line;
+        }
+        
+        /* Zone column */
+        td:first-child {
+            width: 45px;
+            min-width: 45px;
+            font-weight: bold;
+            cursor: help;
+            padding: 2px;
+        }
+        
+        /* Band columns */
+        th:not(:first-child), 
+        td:not(:first-child) {
+            min-width: 140px;
+        }
+        
+        /* Grid layout for cells */
+        td > div.grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+        
+        td > div.grid > div {
+            padding: 4px 8px;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 80px;
+        }
+        
+        td > div.grid > div:first-child {
+            border-right: 1px solid #ddd;
+        }
+        
+        /* Zone tooltip styles */
+        .zone-tooltip {
+            padding: 1px 2px;
+            background-color: rgba(0, 0, 0, 0.02);
+            transition: background-color 0.2s;
+        }
+        
+        .zone-tooltip:hover {
+            background-color: rgba(0, 0, 0, 0.05);
+        }
+        
+        /* Tooltip styles */
+        .tooltip {
+            cursor: pointer;
+            display: block;
+            width: 100%;
+            height: 100%;
+            white-space: nowrap;
+        }
+        
+        .tippy-box[data-theme~='zone'] {
+            background-color: #333;
+            color: white;
+            font-size: 0.8rem;
+            line-height: 1.3;
+            max-width: none !important;
+            width: auto !important;
+        }
+        
+        .tippy-box[data-theme~='zone'] .tippy-content {
+            padding: 8px 12px;
+        }
+        
+        .tippy-box[data-theme~='zone'] .tippy-arrow {
+            color: #333;
+        }
+        
+        .tippy-content {
+            padding: 0 !important;
+            font-size: 0.8rem;
+            max-width: none !important;
+            width: auto !important;
+            background: white;
+        }
+        
+        /* Station list in tooltip */
+        .station-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 4px;
+            padding: 8px;
+            background: #e4f0f3;
+            color: #333333;
+            max-width: 600px;
+        }
+        
+        .station-list div {
+            padding: 2px 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        /* Hide tooltip templates */
+        .tooltip_templates {
+            display: none;
+        }
+        
+        /* Caption styles */
+        caption {
+            padding: 2px;
+            font-size: 0.85rem;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+        
+        /* Utility classes */
+        .text-blue-600 {
+            color: #2563eb !important;
+        }
+        
+        .text-center {
+            text-align: center;
+        }
+        
+        /* Trend indicators */
+        .trend-up {
+            color: #28a745;
+        }
+        
+        .trend-down {
+            color: #dc3545;
+        }
+        
+        .trend-stable {
+            color: #000000;
+        }
+        
+        /* Footer styles */
+        .footer-text {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 0.8rem;
+        }
+        
+        .footer-text a {
+            color: #2563eb;
+            text-decoration: none;
+        }
+        
+        .footer-text a:hover {
+            text-decoration: underline;
+        }
+        
+        /* Solar data panel */
+        .solar-panel {
+            position: fixed;
+            left: 5%;
+            padding: 10px;
+            z-index: 1000;
+            font-family: 'Roboto', monospace;
+            background: rgba(255, 255, 255, 0.95);
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        /* Legend panel */
+        .legend {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80%;
+            background-color: rgba(255, 255, 255, 0.95);
+            padding: 15px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            z-index: 1000;
+            font-size: 0.85rem;
+        }
+        
+        /* Alternating row colors */
+        tr:nth-child(even) {
+            background-color: rgba(0, 0, 0, 0.02);
+        }
+        
+        /* Responsive design */
+        @media (min-width: 1400px) {
+            table {
+                max-width: 1400px;
+            }
+            
+            th:not(:first-child), 
+            td:not(:first-child) {
+                min-width: 160px;
+            }
+        }
+        
+        @media (max-width: 1200px) {
+            table {
+                max-width: 1000px;
+            }
+            
+            th:not(:first-child), 
+            td:not(:first-child) {
+                min-width: 120px;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            td > div.grid > div {
+                padding: 2px 4px;
+                font-size: 0.75rem;
+            }
+            
+            .station-list {
+                grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            }
+        }
+    """
+
+    template = f"""<!DOCTYPE html>
     <html>
     <head>
         <meta charset="UTF-8">
         <meta http-equiv="refresh" content="60">
         <title>SNR Report</title>
         <style>
-          /* Base styles */
-          body {
-              margin: 0;
-              padding: 4px;
-              font-family: 'Roboto', monospace;
-              font-size: 0.85rem;
-              background: #ffffff;
-              overflow-x: auto;
-          }
-          
-          /* Table styles */
-          table {
-              border-collapse: collapse;
-              width: 100%;
-              max-width: 1200px;
-              margin: 0 auto;
-              table-layout: fixed;
-          }
-          
-          th {
-              position: sticky;
-              top: 0;
-              background-color: rgba(255, 255, 255, 0.95);
-              z-index: 10;
-              padding: 4px 8px;
-              font-size: 0.85rem;
-              border: 1px solid #ddd;
-              font-weight: bold;
-              text-align: center;
-              white-space: nowrap;
-          }
-          
-          td {
-              padding: 0;
-              border: 1px solid #ddd;
-              text-align: center;
-              white-space: nowrap;
-              overflow: hidden;
-              text-overflow: ellipsis;
-          }
-          
-          /* Header subtext */
-          th span.subtext {
-              display: block;
-              font-size: 0.7rem;
-              color: #666;
-              font-weight: normal;
-              white-space: pre-line;
-          }
-          
-          /* Zone column */
-          td:first-child {
-              width: 45px;
-              min-width: 45px;
-              font-weight: bold;
-              cursor: help;
-              padding: 2px;
-          }
-          
-          /* Band columns */
-          th:not(:first-child), 
-          td:not(:first-child) {
-              min-width: 140px;
-          }
-          
-          /* Grid layout for cells */
-          td > div.grid {
-              display: grid;
-              grid-template-columns: 1fr 1fr;
-              width: 100%;
-              height: 100%;
-              margin: 0;
-              padding: 0;
-          }
-          
-          td > div.grid > div {
-              padding: 4px 8px;
-              text-align: center;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              min-width: 80px;
-          }
-          
-          td > div.grid > div:first-child {
-              border-right: 1px solid #ddd;
-          }
-          
-          /* Zone tooltip styles */
-          .zone-tooltip {
-              padding: 1px 2px;
-              background-color: rgba(0, 0, 0, 0.02);
-              transition: background-color 0.2s;
-          }
-          
-          .zone-tooltip:hover {
-              background-color: rgba(0, 0, 0, 0.05);
-          }
-          
-          /* Tooltip styles */
-          .tooltip {
-              cursor: pointer;
-              display: block;
-              width: 100%;
-              height: 100%;
-              white-space: nowrap;
-          }
-          
-          .tippy-box[data-theme~='zone'] {
-              background-color: #333;
-              color: white;
-              font-size: 0.8rem;
-              line-height: 1.3;
-              max-width: none !important;
-              width: auto !important;
-          }
-          
-          .tippy-box[data-theme~='zone'] .tippy-content {
-              padding: 8px 12px;
-          }
-          
-          .tippy-box[data-theme~='zone'] .tippy-arrow {
-              color: #333;
-          }
-          
-          .tippy-content {
-              padding: 0 !important;
-              font-size: 0.8rem;
-              max-width: none !important;
-              width: auto !important;
-              background: white;
-          }
-          
-          /* Station list in tooltip */
-          .station-list {
-              display: grid;
-              grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-              gap: 4px;
-              padding: 8px;
-              background: #e4f0f3;
-              color: #333333;
-              max-width: 600px;
-          }
-          
-          .station-list div {
-              padding: 2px 4px;
-              white-space: nowrap;
-              overflow: hidden;
-              text-overflow: ellipsis;
-          }
-          
-          /* Hide tooltip templates */
-          .tooltip_templates {
-              display: none;
-          }
-          
-          /* Caption styles */
-          caption {
-              padding: 2px;
-              font-size: 0.85rem;
-              font-weight: bold;
-              margin-bottom: 8px;
-          }
-          
-          /* Utility classes */
-          .text-blue-600 {
-              color: #2563eb !important;
-          }
-          
-          .text-center {
-              text-align: center;
-          }
-          
-          /* Trend indicators */
-          .trend-up {
-              color: #28a745;
-          }
-          
-          .trend-down {
-              color: #dc3545;
-          }
-          
-          .trend-stable {
-              color: #000000;
-          }
-          
-          /* Footer styles */
-          .footer-text {
-              text-align: center;
-              margin-top: 20px;
-              font-size: 0.8rem;
-          }
-          
-          .footer-text a {
-              color: #2563eb;
-              text-decoration: none;
-          }
-          
-          .footer-text a:hover {
-              text-decoration: underline;
-          }
-          
-          /* Solar data panel */
-          .solar-panel {
-              position: fixed;
-              left: 5%;
-              padding: 10px;
-              z-index: 1000;
-              font-family: 'Roboto', monospace;
-              background: rgba(255, 255, 255, 0.95);
-              border: 1px solid #ddd;
-              border-radius: 4px;
-              box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-          }
-          
-          /* Legend panel */
-          .legend {
-              position: fixed;
-              bottom: 20px;
-              left: 50%;
-              transform: translateX(-50%);
-              width: 80%;
-              background-color: rgba(255, 255, 255, 0.95);
-              padding: 15px;
-              border: 1px solid #ccc;
-              border-radius: 8px;
-              box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-              z-index: 1000;
-              font-size: 0.85rem;
-          }
-          
-          /* Alternating row colors */
-          tr:nth-child(even) {
-              background-color: rgba(0, 0, 0, 0.02);
-          }
-          
-          /* Responsive design */
-          @media (min-width: 1400px) {
-              table {
-                  max-width: 1400px;
-              }
-              
-              th:not(:first-child), 
-              td:not(:first-child) {
-                  min-width: 160px;
-              }
-          }
-          
-          @media (max-width: 1200px) {
-              table {
-                  max-width: 1000px;
-              }
-              
-              th:not(:first-child), 
-              td:not(:first-child) {
-                  min-width: 120px;
-              }
-          }
-          
-          @media (max-width: 768px) {
-              td > div.grid > div {
-                  padding: 2px 4px;
-                  font-size: 0.75rem;
-              }
-              
-              .station-list {
-                  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-              }
-          }
+        {css_styles}
         </style>
         <link rel="stylesheet" href="https://unpkg.com/tippy.js@6/animations/scale.css">
     </head>
@@ -762,8 +765,7 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
             }});
         </script>
     </body>
-    </html>
-    """
+    </html>"""
     return template
 
 def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False):
