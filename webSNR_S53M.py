@@ -138,7 +138,7 @@ def reformat_table(table):
         if table is None or table.empty:
             # Create zone_display with improved tooltip structure
             all_zones['zone_display'] = all_zones['zone'].apply(
-                lambda x: f'<div class="zone-tooltip" style="display: inline-block; width: 100%; cursor: help;" title="{zone_name_map.get(int(x), "Unknown Zone")}">{str(int(x)).zfill(2)}</div>'
+                lambda x: f'<div class="zone-tooltip" style="display: inline-block; text-align: center; width: 100%; cursor: help;" title="{zone_name_map.get(int(x), "Unknown Zone")}">{str(int(x)).zfill(2)}</div>'
             )
             for band in band_order:
                 all_zones[band] = ''
@@ -152,7 +152,7 @@ def reformat_table(table):
         
         # Create zone_display with improved tooltip structure
         flattened['zone_display'] = flattened['zone'].apply(
-            lambda x: f'<div class="zone-tooltip" style="display: inline-block; width: 100%; cursor: help;" title="{zone_name_map.get(int(x), "Unknown Zone")}">{str(int(x)).zfill(2)}</div>'
+            lambda x: f'<div class="zone-tooltip" style="display: inline-block; width: 100%; text-align: center; cursor: help;" title="{zone_name_map.get(int(x), "Unknown Zone")}">{str(int(x)).zfill(2)}</div>'
         )
         
         # Sort by zone and reset index
@@ -494,6 +494,7 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
 
             .zone-tooltip {{
                 padding: 1px 2px;
+                text-align: center;
                 background-color: rgba(0, 0, 0, 0.02);
                 transition: background-color 0.2s;
             }}
