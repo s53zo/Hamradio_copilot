@@ -635,7 +635,6 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
     query = """
     SELECT zone, band, CAST(snr AS FLOAT) as snr, timestamp, spotter, spotted_station
     FROM callsigns
-    WHERE spotter = 'S53M'
     """
     
     try:
