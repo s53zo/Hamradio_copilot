@@ -420,6 +420,13 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
                 font-size: 0.85rem;
                 background: #ffffff;
             }}
+            
+            @media (max-width: 768px) {{
+                body {{
+                    padding: 2px;
+                    font-size: 0.75rem;
+                }}
+            }}
     
             table {{
                 border-collapse: collapse;
@@ -427,6 +434,12 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
                 max-width: 800px;
                 margin: 0 auto;
                 table-layout: fixed;
+            }}
+            
+            @media (max-width: 768px) {{
+                table {{
+                    max-width: 100%;
+                }}
             }}
     
             th {{
@@ -439,6 +452,13 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
                 border: 1px solid #ddd;
                 font-weight: bold;
             }}
+            
+            @media (max-width: 768px) {{
+                th {{
+                    font-size: 0.75rem;
+                    padding: 1px;
+                }}
+            }}
     
             td {{
                 padding: 1px 2px;
@@ -447,6 +467,12 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
                 white-space: nowrap;
                 overflow: hidden;
                 text-overflow: ellipsis;
+            }}
+            
+            @media (max-width: 768px) {{
+                td {{
+                    padding: 1px;
+                }}
             }}
     
             tr:nth-child(even) {{
@@ -458,6 +484,12 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
                 font-weight: bold;
                 cursor: help;
                 padding: 0;
+            }}
+            
+            @media (max-width: 768px) {{
+                td:first-child {{
+                    width: 30px;
+                }}
             }}
 
             .zone-tooltip {{
@@ -477,10 +509,18 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
                 line-height: 1.3;
                 max-width: none !important;
                 width: auto !important;
+                border-radius: 4px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.15);
             }}
 
             .tippy-box[data-theme~='zone'] .tippy-content {{
                 padding: 8px 12px;
+            }}
+            
+            @media (max-width: 768px) {{
+                .tippy-box[data-theme~='zone'] {{
+                    font-size: 0.7rem;
+                }}
             }}
     
             .tippy-box[data-theme~='zone'] .tippy-arrow {{
@@ -508,6 +548,7 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
                 color: #333333;
                 width: fit-content;
                 max-width: 100%;
+                border-radius: 4px;
             }}
 
             .station-list div {{
@@ -515,6 +556,14 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
                 white-space: nowrap;
                 overflow: hidden;
                 text-overflow: ellipsis;
+                background: rgba(255,255,255,0.8);
+                border-radius: 2px;
+            }}
+            
+            @media (max-width: 768px) {{
+                .station-list {{
+                    grid-template-columns: repeat(3, minmax(60px, max-content));
+                }}
             }}
     
             .tooltip_templates {{
