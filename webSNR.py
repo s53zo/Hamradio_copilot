@@ -288,7 +288,7 @@ def compute_ema_slope(df, zone, band, span_minutes=5):
         print(f"Error calculating EMA slope: {e}")
         return np.nan, ema_snr # Return NaN slope but still return EMA data
 
-def generate_sparkline_svg(data, trend_slope, width=50, height=15, stroke_width=1, default_color='black'):
+def generate_sparkline_svg(data, trend_slope, width=30, height=15, stroke_width=1, default_color='black'):
     """
     Generates an SVG sparkline from a pandas Series of data, coloring the last segment based on trend.
     """
@@ -499,7 +499,7 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
             table {{
                 border-collapse: collapse;
                 width: 100%;
-                max-width: 1000px;
+                max-width: 1200px;
                 margin: 0 auto;
                 table-layout: fixed;
             }}
