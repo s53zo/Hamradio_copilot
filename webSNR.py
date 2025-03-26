@@ -187,7 +187,9 @@ def slope_to_unicode(slope):
     """
     Converts a slope value to a corresponding Unicode character.
     """
-    if -0.1 <= slope <= 0.1:
+    if pd.isna(slope): # Handle NaN slope explicitly
+        return ''
+    elif -0.1 <= slope <= 0.1:
         return '\u21D4'  # ⇔
     elif 0.1 < slope <= 0.3:
         return '\u21D7'  # ⇗
@@ -198,7 +200,7 @@ def slope_to_unicode(slope):
     elif slope < -0.3:
         return '\u21D3'  # ⇓
     else:
-        return ''
+        return '' # Should not happen if NaN is handled
 
 def compute_slope(df, zone, band):
     """
@@ -224,6 +226,75 @@ def compute_slope(df, zone, band):
     except Exception as e:
         print(f"Error calculating slope: {e}")
         return np.nan
+
+def compute_ema_slope(df, zone, band, span_minutes=5):
+    """
+    Computes the slope of the Exponential Moving Average (EMA) of SNR over time.
+    Returns slope and the EMA series for sparkline.
+    """
+    relevant_spots = df[(df['zone'] == zone) & (df['band'] == band)].copy()
+
+    if len(relevant_spots) < 2:
+        return np.nan, pd.Series(dtype=float) # Return NaN slope and empty series for sparkline
+
+    relevant_spots.loc[:, 'minute'] = relevant_spots['timestamp'].dt.floor('min')
+    avg_per_minute = relevant_spots.groupby('minute')['snr'].mean().reset_index()
+
+    if len(avg_per_minute) < 2:
+        # Still return the (short) series for potential sparkline if needed
+        return np.nan, avg_per_minute.set_index('minute')['snr'].sort_index() 
+
+    # Ensure the index is datetime for EMA calculation
+    avg_per_minute = avg_per_minute.set_index('minute').sort_index()
+
+    # Calculate EMA
+    # Adjust span based on expected data frequency (e.g., 1 minute)
+    ema_snr = avg_per_minute['snr'].ewm(span=span_minutes, adjust=False).mean()
+
+    # Prepare data for regression on EMA
+    time_values = ema_snr.index.astype(np.int64) // 1e9 / 60 # Convert to minutes
+    snr_values_ema = ema_snr.values
+
+    if len(time_values) < 2 or time_values.nunique() == 1:
+        return np.nan, ema_snr # Return NaN slope but still return EMA data for sparkline
+
+    try:
+        slope, _, _, _, _ = linregress(time_values, snr_values_ema)
+        return slope, ema_snr # Return slope and EMA data
+    except Exception as e:
+        print(f"Error calculating EMA slope: {e}")
+        return np.nan, ema_snr # Return NaN slope but still return EMA data
+
+def generate_sparkline_svg(data, width=50, height=15, stroke_width=1, color='black'):
+    """
+    Generates an SVG sparkline from a pandas Series of data.
+    """
+    if data.empty or len(data) < 2:
+        return ""
+
+    y = data.dropna().values # Drop NaN values before plotting
+    if len(y) < 2:
+        return ""
+        
+    x = np.arange(len(y))
+
+    # Normalize data
+    min_y, max_y = np.min(y), np.max(y)
+    range_y = max_y - min_y if max_y > min_y else 1
+    # Add small epsilon to prevent division by zero if range_y is 0
+    range_y = range_y if range_y > 1e-9 else 1 
+    norm_y = (y - min_y) / range_y * (height - stroke_width * 2) + stroke_width
+
+    min_x, max_x = np.min(x), np.max(x)
+    range_x = max_x - min_x if max_x > min_x else 1
+    # Add small epsilon to prevent division by zero if range_x is 0
+    range_x = range_x if range_x > 1e-9 else 1
+    norm_x = (x - min_x) / range_x * (width - stroke_width * 2) + stroke_width
+
+    points = " ".join([f"{px:.2f},{height - py:.2f}" for px, py in zip(norm_x, norm_y)])
+
+    return f'<svg width="{width}" height="{height}" style="vertical-align: middle; margin-right: 3px;"><polyline points="{points}" fill="none" stroke="{color}" stroke-width="{stroke_width}"/></svg>'
+
 
 def get_intensity(count, max_count=1000):
     """
@@ -301,80 +372,68 @@ def snr_to_color(val, count):
         return 'background-color: #ffffff; padding: 1px 2px;'
 
 
-def combine_snr_count(mean_table_row, count_table, band, df, row_index):
+def combine_snr_count(zone, band, median_snr, q1_snr, q3_snr, count, ema_slope, sparkline_svg, df, row_index):
     """
-    Combines SNR and count data with proper empty value handling.
+    Combines SNR stats (Median, IQR), count, EMA trend, and sparkline for table cell display.
     """
     try:
-        zone = mean_table_row['zone']
-        
-        # Handle SNR value - convert to float or None
-        snr = mean_table_row[band] if band in mean_table_row else None
-        if isinstance(snr, str) and snr.strip() == '':
-            snr = None
-        elif snr is not None:
-            try:
-                snr = float(snr)
-            except (ValueError, TypeError):
-                snr = None
-        
-        # Handle count value - convert to int or 0
-        count = count_table.at[row_index, band] if band in count_table.columns else 0
-        if pd.isna(count) or (isinstance(count, str) and count.strip() == ''):
-            count = 0
+        # Format Median and IQR
+        if pd.isna(median_snr):
+            snr_display = "N/A"
         else:
-            try:
-                count = int(count)
-            except (ValueError, TypeError):
-                count = 0
+            median_snr_int = int(round(median_snr))
+            if pd.isna(q1_snr) or pd.isna(q3_snr):
+                snr_display = f"{median_snr_int}"
+            else:
+                q1_int = int(round(q1_snr))
+                q3_int = int(round(q3_snr))
+                snr_display = f"{median_snr_int} <span class='iqr-text'>[{q1_int},{q3_int}]</span>"
 
-        # Generate display text
-        if snr is None and count == 0:
-            return "", None
-        elif snr is None:
-            display_text = f'N/A <span class="count-text">({count})</span>'
-        else:
-            display_text = f'{int(round(snr))} <span class="count-text">({count})</span>'
+        # Format count
+        count_display = f'<span class="count-text">({count})</span>'
 
-        # Compute slope and get arrow only if we have data
-        if snr is not None and count > 0:
-            slope = compute_slope(df, zone, band)
-            slope_arrow = slope_to_unicode(slope)
+        # Combine SNR and count display
+        display_text = f"{snr_display} {count_display}"
 
-            # Determine arrow color
-            if pd.isna(slope) or (-0.1 <= slope <= 0.1):
+        # Get trend arrow based on EMA slope
+        if count > 0: # Only show arrow if there's data
+            slope_arrow = slope_to_unicode(ema_slope)
+            # Determine arrow color based on EMA slope
+            if pd.isna(ema_slope) or (-0.1 <= ema_slope <= 0.1):
                 arrow_color = '#000000'  # black
-            elif slope > 0.1:
+            elif ema_slope > 0.1:
                 arrow_color = '#28a745'  # green
             else:
                 arrow_color = '#dc3545'  # red
 
             styled_arrow = f'<span style="font-size: 0.9rem; color: {arrow_color};">{slope_arrow}</span>'
-            display_text_with_arrow = f'{display_text} {styled_arrow}'
+            # Combine sparkline, text, and arrow
+            cell_content = f'{sparkline_svg}{display_text} {styled_arrow}'
         else:
-            display_text_with_arrow = display_text
+            # If no count, just show empty or potentially just the sparkline if desired
+            cell_content = "" # Or potentially just sparkline_svg if you want to show trend even with 0 count
 
-        # Get spotted stations only if we have data
+        # Generate tooltip content (spotted stations) - only if count > 0
+        tooltip_data = None
         if count > 0:
             relevant_spots = df[(df['zone'] == zone) & (df['band'] == band)].copy()
             unique_stations = sorted(set(relevant_spots['spotted_station']))
             
             tooltip_id = f"tooltip_{row_index}_{band}"
-         
             tooltip_content_html = '<div class="station-list">'
             for station in unique_stations:
-                display_station = station.replace('.', '/') #to avoid KH0.AA3B and have KH0/AA3B
+                display_station = station.replace('.', '/') # Keep existing logic
                 tooltip_content_html += f'<div>{html.escape(display_station)}</div>'
             tooltip_content_html += '</div>'
+            tooltip_data = (tooltip_id, tooltip_content_html)
 
-            cell_html = f'<span class="tooltip" data-tooltip-content="#{tooltip_id}">{display_text_with_arrow}</span>'
-            
-            return cell_html, (tooltip_id, tooltip_content_html)
-        else:
-            return display_text_with_arrow, None
+            # Wrap cell content in tooltip span if there's tooltip data
+            cell_content = f'<span class="tooltip" data-tooltip-content="#{tooltip_id}">{cell_content}</span>'
+
+        return cell_content, tooltip_data
 
     except Exception as e:
-        print(f"Error processing zone {zone if 'zone' in locals() else 'unknown'} and band {band}: {str(e)}")
+        print(f"Error processing zone {zone} and band {band}: {str(e)}")
         return "", None
 
 def generate_empty_cell_style(total_zones=40):
@@ -436,6 +495,8 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
                 white-space: nowrap;
                 overflow: hidden;
                 text-overflow: ellipsis;
+                /* Ensure SVG and text align */
+                vertical-align: middle; 
             }}
     
             tr:nth-child(even) {{
@@ -486,6 +547,9 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
 
             .tooltip {{
                 cursor: pointer;
+                /* Allow tooltip span to contain block/inline-block elements */
+                display: inline-block; 
+                width: 100%;
             }}
 
             .station-list {{
@@ -519,6 +583,16 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
             .count-text {{
                 font-size: 0.7rem;
                 color: #666;
+            }}
+
+            .iqr-text {{
+                font-size: 0.65rem; /* Slightly smaller for IQR */
+                color: #888; /* Lighter color for IQR */
+            }}
+
+            td svg {{ /* Style for sparkline SVG */
+                vertical-align: middle;
+                margin-right: 3px; /* Space between sparkline and text */
             }}
 
             .legend {{
@@ -620,90 +694,117 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
 
     all_zones = pd.Index(range(1, 41), name='zone')
 
-    # Create count table
-    count_table = df.groupby(['zone', 'band'], observed=True).agg(
-        count=('spotter', lambda x: len(set(zip(x, df.loc[x.index, 'spotted_station']))))
-    ).reset_index().pivot(
-        index='zone',
-        columns='band',
-        values='count'
-    ).reindex(all_zones, fill_value=0)
+    # --- Calculate Aggregated Stats (Median, IQR, Count) ---
+    agg_funcs = {
+        'snr': ['median', lambda x: x.quantile(0.25), lambda x: x.quantile(0.75)],
+        'spotter': [('count', lambda x: len(set(zip(x, df.loc[x.index, 'spotted_station']))))]
+    }
+    
+    stats_table = df.groupby(['zone', 'band'], observed=True).agg(agg_funcs).unstack()
+    stats_table.columns = ['_'.join(col).strip() for col in stats_table.columns.values] # Flatten multi-index columns
+    
+    # Rename columns for clarity
+    stats_table = stats_table.rename(columns={
+        'snr_median': 'median_snr',
+        'snr_<lambda_0>': 'q1_snr',
+        'snr_<lambda_1>': 'q3_snr',
+        'spotter_count': 'count'
+    })
+    
+    stats_table = stats_table.reindex(
+        pd.MultiIndex.from_product([all_zones, band_order], names=['zone', 'band'])
+    ).unstack(level='band') # Ensure all zone/band combinations are present and pivot bands to columns
+    
+    # Separate tables for easier handling later
+    median_table = stats_table['median_snr'].reindex(all_zones)
+    q1_table = stats_table['q1_snr'].reindex(all_zones)
+    q3_table = stats_table['q3_snr'].reindex(all_zones)
+    count_table = stats_table['count'].fillna(0).astype(int).reindex(all_zones) # Fill NaN counts with 0
 
-    # Create mean table
-    mean_table = df.pivot_table(
-        values='snr',
-        index='zone',
-        columns='band',
-        aggfunc='median',
-        observed=True,
-        dropna=False
-    ).reindex(all_zones)
-
-    # Convert numeric columns to float
-    numeric_columns = mean_table.select_dtypes(include=['number']).columns
-    mean_table[numeric_columns] = mean_table[numeric_columns].astype('float')
-
-    # Ensure both tables have the same index
-    all_zones = sorted(set(count_table.index) | set(mean_table.index))
-    count_table = count_table.reindex(all_zones, fill_value=0)
-    mean_table = mean_table.reindex(all_zones)
-
-    # Reformat the tables
-    count_table = reformat_table(count_table)
-    mean_table = reformat_table(mean_table)
+    # --- Prepare data for EMA slope and Sparklines ---
+    # Calculate per-minute averages for the entire dataset (within the time span)
+    df_minute_avg = df.copy()
+    df_minute_avg['minute'] = df_minute_avg['timestamp'].dt.floor('min')
+    per_minute_snr = df_minute_avg.groupby(['zone', 'band', 'minute'], observed=True)['snr'].mean().reset_index()
+    
+    # --- Reformat tables for display ---
+    # Reformat needs to handle potentially multi-level columns if not careful
+    # We'll pass individual stat tables (median, q1, q3, count) to combine_snr_count later
+    # Reformat the base structure for the final table (using median table as template)
+    display_table_base = reformat_table(median_table.copy()) # Use copy to avoid modifying original
 
     if debug:
         print("Count Table:")
         print(count_table.head())
-        print("Mean Table:")
-        print(mean_table.head())
+        print("Median Table:")
+        print(median_table.head())
+        print("Q1 Table:")
+        print(q1_table.head())
+        print("Q3 Table:")
+        print(q3_table.head())
 
     now = dt.datetime.now(dt.timezone.utc).strftime("%b %d, %Y %H:%M")
-    caption_string = f"Last {int(span*60)} minutes SNR of spots in S5 and around - refresh at {now} GMT"
+    caption_string = f"Last {int(span*60)} minutes SNR (Median [Q1,Q3]) of spots in S5 and around - refresh at {now} GMT"
 
-    # Combine mean_table and count_table into a single table with desired cell content
-    combined_table = mean_table.copy()
+    # Create the final display table structure from the base
+    combined_table = display_table_base.copy()
     
     # Tooltip content list
     tooltip_contents = []
 
-    # Create color mapping for each cell
-    color_styles = pd.DataFrame('', index=mean_table.index, columns=mean_table.columns)
+    # Create color mapping for each cell based on median SNR
+    color_styles = pd.DataFrame('', index=median_table.index, columns=median_table.columns)
     
     # Iterate through bands and create combined display and colors
     for band in band_order:
-        if band in mean_table.columns:
+        if band in median_table.columns: # Check if band exists in the data
             combined_results = []
-            for idx, row in mean_table.iterrows():
-                # Get SNR value and count
-                snr = row[band] if band in row else None
+            for idx, row in median_table.iterrows(): # Iterate through zones (index)
+                zone = idx + 1 # Zone number (index is 0-based)
+                median_snr = row[band]
+                q1_snr = q1_table.at[idx, band] if band in q1_table.columns else np.nan
+                q3_snr = q3_table.at[idx, band] if band in q3_table.columns else np.nan
                 count = count_table.at[idx, band] if band in count_table.columns else 0
                 
+                # Get recent per-minute data for EMA slope and sparkline
+                recent_snr_data = per_minute_snr[
+                    (per_minute_snr['zone'] == zone) & (per_minute_snr['band'] == band)
+                ].set_index('minute')['snr'].sort_index()
+
+                # Calculate EMA slope and get EMA series
+                ema_slope, ema_series = compute_ema_slope(df, zone, band) # Pass original df for calculation
+
+                # Generate sparkline from EMA series
+                sparkline_svg = generate_sparkline_svg(ema_series)
+
+                # Apply color based on median SNR and count
                 try:
-                    count = int(count) if count != '' else 0
-                    if not pd.isna(snr) and count > 0:
-                        color_styles.at[idx, band] = snr_to_color(snr, count)
+                    if not pd.isna(median_snr) and count > 0:
+                        color_styles.at[idx, band] = snr_to_color(median_snr, count)
                 except (ValueError, TypeError):
-                    count = 0
-                
-                # Combine SNR and count display
-                result = combine_snr_count(row, count_table, band, df, idx)
+                    pass # Keep default style if error
+
+                # Combine display elements
+                result = combine_snr_count(
+                    zone, band, median_snr, q1_snr, q3_snr, count, ema_slope, sparkline_svg, df, idx
+                )
                 combined_results.append(result)
             
             combined_table[band] = [result[0] for result in combined_results]
             tooltip_contents.extend([content for _, content in combined_results if content])
         else:
-            combined_table[band] = ' '
+            combined_table[band] = ' ' # Ensure column exists even if no data
 
-    # Handle 'zone' column separately
-    if 'zone' in combined_table.columns and 'zone' in mean_table.columns:
-        combined_table['zone'] = mean_table['zone']
-        combined_table['zone_display'] = mean_table['zone_display']
+    # Handle 'zone' column separately (already done in display_table_base)
+    # combined_table['zone'] = display_table_base['zone'] # Not needed if using display_table_base
+    combined_table['zone_display'] = display_table_base['zone_display']
 
     # Ensure the columns are ordered as per band_order
     combined_table = combined_table[['zone_display'] + band_order]
     combined_table = combined_table.rename(columns={'zone_display': 'zone'})
-    color_styles = color_styles[band_order]  # Match columns with combined_table
+    
+    # Ensure color_styles has the correct columns
+    color_styles = color_styles.reindex(columns=band_order, fill_value='')
 
     # Apply the styles to the combined table
     styled_table = combined_table.style.apply(lambda x: color_styles, axis=None).set_caption(caption_string)
