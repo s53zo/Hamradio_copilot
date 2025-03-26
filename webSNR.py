@@ -697,40 +697,27 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
     # --- Calculate Aggregated Stats (Median, IQR, Count) ---
     agg_funcs = {
         'snr': ['median', lambda x: x.quantile(0.25), lambda x: x.quantile(0.75)],
-        'spotter': [('count', lambda x: len(set(zip(x, df.loc[x.index, 'spotted_station']))))]
+        # Use a unique name for the count aggregation to avoid potential conflicts
+        'spotter': [('unique_spots', lambda x: len(set(zip(x, df.loc[x.index, 'spotted_station']))))] 
     }
     
-    stats_table = df.groupby(['zone', 'band'], observed=True).agg(agg_funcs).unstack()
-    stats_table.columns = ['_'.join(col).strip() for col in stats_table.columns.values] # Flatten multi-index columns
+    # Group, aggregate, and unstack by band
+    stats_table = df.groupby(['zone', 'band'], observed=True).agg(agg_funcs).unstack(level='band')
     
-    # Rename columns for clarity
-    stats_table = stats_table.rename(columns={
-        'snr_median': 'median_snr',
-        'snr_<lambda_0>': 'q1_snr',
-        'snr_<lambda_1>': 'q3_snr',
-        'spotter_count': 'count'
-    })
-    
-    stats_table = stats_table.reindex(
-        pd.MultiIndex.from_product([all_zones, band_order], names=['zone', 'band'])
-    ).unstack(level='band') # Ensure all zone/band combinations are present and pivot bands to columns
-    
-    # Separate tables for easier handling later
-    median_table = stats_table['median_snr'].reindex(all_zones)
-    q1_table = stats_table['q1_snr'].reindex(all_zones)
-    q3_table = stats_table['q3_snr'].reindex(all_zones)
-    count_table = stats_table['count'].fillna(0).astype(int).reindex(all_zones) # Fill NaN counts with 0
+    # Select stats directly using MultiIndex columns and reindex to ensure all zones/bands
+    median_table = stats_table.get(('snr', 'median'), pd.DataFrame()).reindex(index=all_zones, columns=band_order)
+    q1_table = stats_table.get(('snr', '<lambda_0>'), pd.DataFrame()).reindex(index=all_zones, columns=band_order)
+    q3_table = stats_table.get(('snr', '<lambda_1>'), pd.DataFrame()).reindex(index=all_zones, columns=band_order)
+    count_table = stats_table.get(('spotter', 'unique_spots'), pd.DataFrame()).reindex(index=all_zones, columns=band_order).fillna(0).astype(int)
 
     # --- Prepare data for EMA slope and Sparklines ---
     # Calculate per-minute averages for the entire dataset (within the time span)
     df_minute_avg = df.copy()
     df_minute_avg['minute'] = df_minute_avg['timestamp'].dt.floor('min')
     per_minute_snr = df_minute_avg.groupby(['zone', 'band', 'minute'], observed=True)['snr'].mean().reset_index()
-    
-    # --- Reformat tables for display ---
-    # Reformat needs to handle potentially multi-level columns if not careful
-    # We'll pass individual stat tables (median, q1, q3, count) to combine_snr_count later
-    # Reformat the base structure for the final table (using median table as template)
+        
+    # --- Reformat base table structure ---
+    # Reformat the base structure for the final table (using median table as template for zones/bands layout)
     display_table_base = reformat_table(median_table.copy()) # Use copy to avoid modifying original
 
     if debug:
@@ -753,33 +740,39 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
     tooltip_contents = []
 
     # Create color mapping for each cell based on median SNR
-    color_styles = pd.DataFrame('', index=median_table.index, columns=median_table.columns)
+    # Use median_table's index and columns which are guaranteed to cover all zones/bands
+    color_styles = pd.DataFrame('', index=median_table.index, columns=median_table.columns) 
     
     # Iterate through bands and create combined display and colors
     for band in band_order:
         if band in median_table.columns: # Check if band exists in the data
             combined_results = []
-            for idx, row in median_table.iterrows(): # Iterate through zones (index)
+            # Use .iterrows() on median_table which has the full zone index (0-39)
+            for idx, row in median_table.iterrows(): 
                 zone = idx + 1 # Zone number (index is 0-based)
-                median_snr = row[band]
-                q1_snr = q1_table.at[idx, band] if band in q1_table.columns else np.nan
-                q3_snr = q3_table.at[idx, band] if band in q3_table.columns else np.nan
-                count = count_table.at[idx, band] if band in count_table.columns else 0
-                
+                median_snr = row[band] # Get median from current row
+                # Safely get q1, q3, count using .get() on the column and .get() on the index
+                q1_snr = q1_table.get(band, pd.Series(dtype=float)).get(idx, np.nan)
+                q3_snr = q3_table.get(band, pd.Series(dtype=float)).get(idx, np.nan)
+                count = count_table.get(band, pd.Series(dtype=int)).get(idx, 0)
+
                 # Get recent per-minute data for EMA slope and sparkline
+                # Filter the pre-calculated per_minute_snr DataFrame
                 recent_snr_data = per_minute_snr[
                     (per_minute_snr['zone'] == zone) & (per_minute_snr['band'] == band)
                 ].set_index('minute')['snr'].sort_index()
 
                 # Calculate EMA slope and get EMA series
-                ema_slope, ema_series = compute_ema_slope(df, zone, band) # Pass original df for calculation
+                # Pass the main df for calculation, as it contains all necessary raw data
+                ema_slope, ema_series = compute_ema_slope(df, zone, band) 
 
                 # Generate sparkline from EMA series
                 sparkline_svg = generate_sparkline_svg(ema_series)
 
                 # Apply color based on median SNR and count
                 try:
-                    if not pd.isna(median_snr) and count > 0:
+                    # Check median_snr is not NaN and count > 0 before applying color
+                    if not pd.isna(median_snr) and count > 0: 
                         color_styles.at[idx, band] = snr_to_color(median_snr, count)
                 except (ValueError, TypeError):
                     pass # Keep default style if error
@@ -796,15 +789,14 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
             combined_table[band] = ' ' # Ensure column exists even if no data
 
     # Handle 'zone' column separately (already done in display_table_base)
-    # combined_table['zone'] = display_table_base['zone'] # Not needed if using display_table_base
     combined_table['zone_display'] = display_table_base['zone_display']
 
     # Ensure the columns are ordered as per band_order
     combined_table = combined_table[['zone_display'] + band_order]
     combined_table = combined_table.rename(columns={'zone_display': 'zone'})
     
-    # Ensure color_styles has the correct columns
-    color_styles = color_styles.reindex(columns=band_order, fill_value='')
+    # Ensure color_styles has the correct columns and index
+    color_styles = color_styles.reindex(index=all_zones, columns=band_order, fill_value='')
 
     # Apply the styles to the combined table
     styled_table = combined_table.style.apply(lambda x: color_styles, axis=None).set_caption(caption_string)
