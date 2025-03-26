@@ -274,9 +274,9 @@ def compute_ema_slope(df, zone, band, span_minutes=5):
         print(f"Error calculating EMA slope: {e}")
         return np.nan, ema_snr # Return NaN slope but still return EMA data
 
-def generate_sparkline_svg(data, width=50, height=15, stroke_width=1, color='black'):
+def generate_sparkline_svg(data, trend_slope, width=50, height=15, stroke_width=1, default_color='black'):
     """
-    Generates an SVG sparkline from a pandas Series of data.
+    Generates an SVG sparkline from a pandas Series of data, coloring the last segment based on trend.
     """
     if data.empty or len(data) < 2:
         return ""
@@ -290,19 +290,32 @@ def generate_sparkline_svg(data, width=50, height=15, stroke_width=1, color='bla
     # Normalize data
     min_y, max_y = np.min(y), np.max(y)
     range_y = max_y - min_y if max_y > min_y else 1
-    # Add small epsilon to prevent division by zero if range_y is 0
     range_y = range_y if range_y > 1e-9 else 1 
     norm_y = (y - min_y) / range_y * (height - stroke_width * 2) + stroke_width
 
     min_x, max_x = np.min(x), np.max(x)
     range_x = max_x - min_x if max_x > min_x else 1
-    # Add small epsilon to prevent division by zero if range_x is 0
     range_x = range_x if range_x > 1e-9 else 1
     norm_x = (x - min_x) / range_x * (width - stroke_width * 2) + stroke_width
 
-    points = " ".join([f"{px:.2f},{height - py:.2f}" for px, py in zip(norm_x, norm_y)])
+    # Determine trend color
+    if pd.isna(trend_slope) or (-0.1 <= trend_slope <= 0.1):
+        trend_color = default_color  # black or grey for stable/NaN
+    elif trend_slope > 0.1:
+        trend_color = '#28a745'  # green
+    else: # slope < -0.1
+        trend_color = '#dc3545'  # red
 
-    return f'<svg width="{width}" height="{height}" style="vertical-align: middle; margin-right: 3px;"><polyline points="{points}" fill="none" stroke="{color}" stroke-width="{stroke_width}"/></svg>'
+    # Create points strings
+    all_points = " ".join([f"{px:.2f},{height - py:.2f}" for px, py in zip(norm_x, norm_y)])
+    main_points = " ".join([f"{px:.2f},{height - py:.2f}" for px, py in zip(norm_x[:-1], norm_y[:-1])]) # All except last point
+    last_segment_points = " ".join([f"{px:.2f},{height - py:.2f}" for px, py in zip(norm_x[-2:], norm_y[-2:])]) # Last two points
+
+    # Generate SVG with two polylines
+    svg_content = f'<polyline points="{main_points}" fill="none" stroke="{default_color}" stroke-width="{stroke_width}"/>'
+    svg_content += f'<polyline points="{last_segment_points}" fill="none" stroke="{trend_color}" stroke-width="{stroke_width}"/>'
+    
+    return f'<svg width="{width}" height="{height}" style="vertical-align: middle; margin-right: 3px;">{svg_content}</svg>'
 
 
 def get_intensity(count, max_count=1000):
@@ -383,7 +396,7 @@ def snr_to_color(val, count):
 
 def combine_snr_count(zone, band, median_snr, q1_snr, q3_snr, count, ema_slope, sparkline_svg, df, row_index):
     """
-    Combines SNR stats (Median, IQR), count, EMA trend, and sparkline for table cell display.
+    Combines SNR stats (Median, IQR), count, and sparkline (with embedded trend) for table cell display.
     """
     try:
         # Format Median and IQR
@@ -404,23 +417,11 @@ def combine_snr_count(zone, band, median_snr, q1_snr, q3_snr, count, ema_slope, 
         # Combine SNR and count display
         display_text = f"{snr_display} {count_display}"
 
-        # Get trend arrow based on EMA slope
-        if count > 0: # Only show arrow if there's data
-            slope_arrow = slope_to_unicode(ema_slope)
-            # Determine arrow color based on EMA slope
-            if pd.isna(ema_slope) or (-0.1 <= ema_slope <= 0.1):
-                arrow_color = '#000000'  # black
-            elif ema_slope > 0.1:
-                arrow_color = '#28a745'  # green
-            else:
-                arrow_color = '#dc3545'  # red
-
-            styled_arrow = f'<span style="font-size: 0.9rem; color: {arrow_color};">{slope_arrow}</span>'
-            # Combine sparkline, text, and arrow
-            cell_content = f'{sparkline_svg}{display_text} {styled_arrow}'
+        # Combine sparkline and text
+        if count > 0:
+             cell_content = f'{sparkline_svg}{display_text}'
         else:
-            # If no count, just show empty or potentially just the sparkline if desired
-            cell_content = "" # Or potentially just sparkline_svg if you want to show trend even with 0 count
+             cell_content = "" # Empty if no count
 
         # Generate tooltip content (spotted stations) - only if count > 0
         tooltip_data = None
@@ -794,8 +795,8 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
                 # Pass the main df for calculation, as it contains all necessary raw data
                 ema_slope, ema_series = compute_ema_slope(df, zone, band) 
 
-                # Generate sparkline from EMA series
-                sparkline_svg = generate_sparkline_svg(ema_series)
+                # Generate sparkline from EMA series, passing slope for trend coloring
+                sparkline_svg = generate_sparkline_svg(ema_series, trend_slope=ema_slope) 
 
                 # Combine display elements
                 result = combine_snr_count(
