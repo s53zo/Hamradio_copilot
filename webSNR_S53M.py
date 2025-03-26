@@ -604,7 +604,7 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
         {snr_table_html}
         {tooltip_content_html}
         <div style="text-align: center; margin-top: 20px;">
-             {/* Kept original links */}
+
             <small>Make your own SNR overview: <a href="https://github.com/s53zo/Hamradio_copilot">https://github.com/s53zo/Hamradio_copilot</a> <a href="https://azure.s53m.com/copilot/index.html">ALL RX</a> <a href="https://azure.s53m.com/copilot/index_s53m.html">S53M RX only</a></small>
         </div>
 
