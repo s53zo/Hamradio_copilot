@@ -63,9 +63,9 @@ def insert_batch(cursor, buffer_list):
 
 def delete_old_entries(cursor):
     """
-    Deletes entries older than 15 minutes from the SQLite database to keep the data current.
+    Deletes entries older than 60 minutes from the SQLite database to keep the data current.
     """
-    time_ago = datetime.now().timestamp() - timedelta(minutes=15).total_seconds()
+    time_ago = datetime.now().timestamp() - timedelta(minutes=60).total_seconds()
     logging.debug(f"Deleting entries older than timestamp {time_ago}.")
     cursor.execute('DELETE FROM callsigns WHERE timestamp <= ?', (time_ago,))
 
