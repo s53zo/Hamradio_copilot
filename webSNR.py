@@ -739,9 +739,8 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
     # Tooltip content list
     tooltip_contents = []
 
-    # Create color mapping for each cell based on median SNR
-    # Use median_table's index and columns which are guaranteed to cover all zones/bands
-    color_styles = pd.DataFrame('', index=median_table.index, columns=median_table.columns) 
+    # Create color mapping DataFrame with the same index and columns as the final combined_table
+    color_styles = pd.DataFrame('', index=combined_table.index, columns=combined_table.columns)
     
     # Iterate through bands and create combined display and colors
     for band in band_order:
@@ -795,20 +794,15 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
     combined_table = combined_table[['zone_display'] + band_order]
     combined_table = combined_table.rename(columns={'zone_display': 'zone'})
     
-    # Ensure color_styles has the correct columns and index (matching the band columns)
-    color_styles = color_styles.reindex(index=median_table.index, columns=band_order, fill_value='') # Use median_table index (0-39)
+    # Ensure color_styles has the same columns as combined_table for direct application
+    color_styles = color_styles.reindex(columns=combined_table.columns, fill_value='')
 
-    # Define the subset of columns to apply the background color styles to
-    band_columns_subset = pd.IndexSlice[:, band_order]
+    # Apply the styles DataFrame directly using axis=None (elementwise)
+    styled_table = combined_table.style.apply(lambda x: color_styles, axis=None).set_caption(caption_string)
 
-    # Apply the styles to the combined table using the subset
-    # Pass color_styles directly as it now matches the subset shape
-    styled_table = combined_table.style.apply(lambda x: color_styles, axis=None, subset=band_columns_subset).set_caption(caption_string)
-
-    # Apply other non-background properties
+    # Apply other non-background properties separately
     styled_table.set_properties(subset=['zone'], **{'font-weight': 'bold'})
-    # Apply text-align to all cells, including the styled ones
-    styled_table.set_properties(**{'text-align': 'center'}) 
+    styled_table.set_properties(**{'text-align': 'center'})
 
     # Set table styles
     styled_table.set_table_styles([
