@@ -608,12 +608,12 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
             }}
 
             .count-text {{
-                font-size: 0.5rem;
+                font-size: 0.6rem;
                 color: #666;
             }}
 
             .iqr-text {{
-                font-size: 0.5rem; /* Slightly smaller for IQR */
+                font-size: 0.9rem; /* Slightly smaller for IQR */
                 color: #888; /* Lighter color for IQR */
             }}
 
