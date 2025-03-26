@@ -443,7 +443,7 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
     <head>
         <meta charset="UTF-8">
         <meta http-equiv="refresh" content="60">
-        <title>S53M SNR Report</title> {/* Changed Title */}
+        <title>S53M SNR Report</title> 
         <style>
             body {{
                 margin: 0;
