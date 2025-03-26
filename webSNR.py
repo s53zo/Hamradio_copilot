@@ -411,7 +411,7 @@ def combine_snr_count(zone, band, median_snr, q1_snr, q3_snr, count, ema_slope, 
             else:
                 q1_int = int(round(q1_snr))
                 q3_int = int(round(q3_snr))
-                snr_display = f"{median_snr_int} <span class='iqr-text'>[{q1_int},{q3_int}]</span>"
+                snr_display = f"{median_snr_int} <span class='iqr-text'>[{q1_int}/{q3_int}]</span>"
 
         # Format count
         count_display = f'<span class="count-text">({count})</span>'
@@ -593,12 +593,12 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
             }}
 
             .count-text {{
-                font-size: 0.7rem;
+                font-size: 0.5rem;
                 color: #666;
             }}
 
             .iqr-text {{
-                font-size: 0.65rem; /* Slightly smaller for IQR */
+                font-size: 0.5rem; /* Slightly smaller for IQR */
                 color: #888; /* Lighter color for IQR */
             }}
 
