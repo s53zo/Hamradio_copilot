@@ -290,11 +290,13 @@ def generate_sparkline_svg(data, trend_slope, width=50, height=15, stroke_width=
     # Normalize data
     min_y, max_y = np.min(y), np.max(y)
     range_y = max_y - min_y if max_y > min_y else 1
+    # Add small epsilon to prevent division by zero if range_y is 0
     range_y = range_y if range_y > 1e-9 else 1 
     norm_y = (y - min_y) / range_y * (height - stroke_width * 2) + stroke_width
 
     min_x, max_x = np.min(x), np.max(x)
     range_x = max_x - min_x if max_x > min_x else 1
+    # Add small epsilon to prevent division by zero if range_x is 0
     range_x = range_x if range_x > 1e-9 else 1
     norm_x = (x - min_x) / range_x * (width - stroke_width * 2) + stroke_width
 
@@ -750,27 +752,15 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
     
     # Tooltip content list
     tooltip_contents = []
+    
+    # --- Pre-calculate styles ---
+    # Create styles DataFrame matching combined_table structure (index 0-39, columns including 'zone', 'zone_display')
+    styles_df = pd.DataFrame('', index=combined_table.index, columns=combined_table.columns)
+    # Set default white background for all cells initially
+    for col in styles_df.columns:
+         styles_df[col] = 'background-color: #ffffff; padding: 1px 2px;'
 
-    # --- Define Styling Function ---
-    # This function will be applied column-wise to the band columns
-    def style_band_column(band_series):
-        # band_series.name gives the band (e.g., '160')
-        # band_series.index gives the table index (0-39)
-        styles = pd.Series('', index=band_series.index)
-        band_name = band_series.name
-        for idx in band_series.index:
-            zone = idx + 1 # Zone 1-40
-            # Safely get median and count using the zone index (1-40)
-            median_snr = median_table.loc[zone, band_name] if zone in median_table.index and band_name in median_table.columns else np.nan
-            count = count_table.loc[zone, band_name] if zone in count_table.index and band_name in count_table.columns else 0
-            if not pd.isna(median_snr) and count > 0:
-                styles.loc[idx] = snr_to_color(median_snr, count)
-            else:
-                styles.loc[idx] = 'background-color: #ffffff; padding: 1px 2px;' # Default white
-        return styles
-
-    # --- Populate combined_table and Apply Styles ---
-    # Iterate through bands to populate combined_table
+    # --- Populate combined_table and styles_df ---
     for band in band_order:
         if band in median_table.columns: # Check if band exists in the data
             combined_results = []
@@ -803,11 +793,17 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
                     zone, band, median_snr, q1_snr, q3_snr, count, ema_slope, sparkline_svg, df, idx # Pass idx (0-39) for tooltip ID
                 )
                 combined_results.append(result)
+
+                # Calculate and store style string in styles_df using index 'idx' (0-39)
+                if not pd.isna(median_snr) and count > 0:
+                    styles_df.loc[idx, band] = snr_to_color(median_snr, count)
+                # else: style remains default white
             
             combined_table[band] = [result[0] for result in combined_results]
             tooltip_contents.extend([content for _, content in combined_results if content])
         else:
             combined_table[band] = ' ' # Ensure column exists even if no data
+            styles_df[band] = 'background-color: #ffffff; padding: 1px 2px;' # Ensure style column exists
 
     # Handle 'zone' column separately (already done in display_table_base)
     combined_table['zone_display'] = display_table_base['zone_display']
@@ -816,8 +812,13 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
     combined_table = combined_table[['zone_display'] + band_order]
     combined_table = combined_table.rename(columns={'zone_display': 'zone'})
     
-    # Apply the styling function column-wise to the band columns
-    styled_table = combined_table.style.apply(style_band_column, axis=0, subset=band_order).set_caption(caption_string)
+    # Ensure styles_df has the correct columns ('zone' + band_order) matching combined_table
+    styles_df = styles_df.reindex(columns=combined_table.columns, fill_value='background-color: #ffffff; padding: 1px 2px;')
+    # Set default style for the 'zone' column (no background color)
+    styles_df['zone'] = '' 
+
+    # Apply the styles DataFrame directly using axis=None (elementwise)
+    styled_table = combined_table.style.apply(lambda x: styles_df, axis=None).set_caption(caption_string)
 
     # Apply other non-background properties separately
     styled_table.set_properties(subset=['zone'], **{'font-weight': 'bold'})
