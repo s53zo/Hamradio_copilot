@@ -516,7 +516,7 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
             }}
     
             td {{
-                padding: 1px 2px;
+                padding: 1px 12px;
                 border: 1px solid #ddd;
                 text-align: center;
                 white-space: nowrap;
