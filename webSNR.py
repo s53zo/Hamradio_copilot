@@ -795,14 +795,20 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
     combined_table = combined_table[['zone_display'] + band_order]
     combined_table = combined_table.rename(columns={'zone_display': 'zone'})
     
-    # Ensure color_styles has the correct columns and index
-    color_styles = color_styles.reindex(index=all_zones, columns=band_order, fill_value='')
+    # Ensure color_styles has the correct columns and index (matching the band columns)
+    color_styles = color_styles.reindex(index=median_table.index, columns=band_order, fill_value='') # Use median_table index (0-39)
 
-    # Apply the styles to the combined table
-    styled_table = combined_table.style.apply(lambda x: color_styles, axis=None).set_caption(caption_string)
+    # Define the subset of columns to apply the background color styles to
+    band_columns_subset = pd.IndexSlice[:, band_order]
 
+    # Apply the styles to the combined table using the subset
+    # Pass color_styles directly as it now matches the subset shape
+    styled_table = combined_table.style.apply(lambda x: color_styles, axis=None, subset=band_columns_subset).set_caption(caption_string)
+
+    # Apply other non-background properties
     styled_table.set_properties(subset=['zone'], **{'font-weight': 'bold'})
-    styled_table.set_properties(**{'text-align': 'center'})
+    # Apply text-align to all cells, including the styled ones
+    styled_table.set_properties(**{'text-align': 'center'}) 
 
     # Set table styles
     styled_table.set_table_styles([
