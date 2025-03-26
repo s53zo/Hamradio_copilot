@@ -130,33 +130,35 @@ def upload_file_to_s3(file_name, bucket_name, acc_key, sec_key):
 def reformat_table(table):
     """
     Reformats the pivot table with improved zone tooltips.
+    Ensures the returned DataFrame has a standard 0-based index.
     """
     try:
-        # Create a base DataFrame with all zones
-        all_zones = pd.DataFrame({'zone': range(1, 41)})
+        # Create a base DataFrame with all zones (1-40)
+        all_zones_df = pd.DataFrame({'zone': range(1, 41)})
         
         if table is None or table.empty:
             # Create zone_display with improved tooltip structure
-            all_zones['zone_display'] = all_zones['zone'].apply(
+            all_zones_df['zone_display'] = all_zones_df['zone'].apply(
                 lambda x: f'<div class="zone-tooltip" style="display: inline-block; width: 100%; text-align: center; cursor: help;" title="{zone_name_map.get(int(x), "Unknown Zone")}">{str(int(x)).zfill(2)}</div>'
             )
             for band in band_order:
-                all_zones[band] = ''
-            return all_zones
+                all_zones_df[band] = ''
+            # Reset index here to ensure 0-39 index
+            return all_zones_df.reset_index(drop=True) 
 
-        # Flatten the pivot table
+        # Flatten the pivot table (which might have zone index 1-40)
         flattened = table.reset_index()
         
-        # Merge with all_zones to ensure all zones are present
-        flattened = pd.merge(all_zones, flattened, on='zone', how='left')
+        # Merge with all_zones_df to ensure all zones are present
+        flattened = pd.merge(all_zones_df, flattened, on='zone', how='left')
         
         # Create zone_display with improved tooltip structure
         flattened['zone_display'] = flattened['zone'].apply(
             lambda x: f'<div class="zone-tooltip" style="display: inline-block; width: 100%; text-align: center; cursor: help;" title="{zone_name_map.get(int(x), "Unknown Zone")}">{str(int(x)).zfill(2)}</div>'
         )
         
-        # Sort by zone and reset index
-        flattened = flattened.sort_values(by='zone').reset_index(drop=True)
+        # Sort by zone and reset index to ensure 0-39 index
+        flattened = flattened.sort_values(by='zone').reset_index(drop=True) 
         
         # Ensure all band columns exist
         for band in band_order:
@@ -170,10 +172,17 @@ def reformat_table(table):
         # Fill NaN values with empty strings
         flattened = flattened.fillna('')
         
-        return flattened
+        return flattened # Returns DataFrame with index 0-39
     except Exception as e:
         print(f"Error in reformat_table: {str(e)}")
-        return all_zones
+        # Return a default structure in case of error, ensuring 0-39 index
+        all_zones_df = pd.DataFrame({'zone': range(1, 41)})
+        all_zones_df['zone_display'] = all_zones_df['zone'].apply(
+            lambda x: f'<div class="zone-tooltip" style="display: inline-block; width: 100%; text-align: center; cursor: help;" title="Error">{str(int(x)).zfill(2)}</div>'
+        )
+        for band in band_order:
+             all_zones_df[band] = ''
+        return all_zones_df.reset_index(drop=True) # Ensure 0-39 index on error return
       
 def delete_old(df, time_hours):
     """
@@ -419,7 +428,7 @@ def combine_snr_count(zone, band, median_snr, q1_snr, q3_snr, count, ema_slope, 
             relevant_spots = df[(df['zone'] == zone) & (df['band'] == band)].copy()
             unique_stations = sorted(set(relevant_spots['spotted_station']))
             
-            tooltip_id = f"tooltip_{row_index}_{band}"
+            tooltip_id = f"tooltip_{row_index}_{band}" # Use row_index (0-39) for unique tooltip ID
             tooltip_content_html = '<div class="station-list">'
             for station in unique_stations:
                 display_station = station.replace('.', '/') # Keep existing logic
@@ -692,7 +701,7 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
     df['band'] = df['band'].astype('category')
     df['band'] = df['band'].cat.set_categories(band_order)
 
-    all_zones = pd.Index(range(1, 41), name='zone')
+    all_zones = pd.Index(range(1, 41), name='zone') # Index 1-40 for accessing data
 
     # --- Calculate Aggregated Stats (Median, IQR, Count) ---
     agg_funcs = {
@@ -705,6 +714,7 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
     stats_table = df.groupby(['zone', 'band'], observed=True).agg(agg_funcs).unstack(level='band')
     
     # Select stats directly using MultiIndex columns and reindex to ensure all zones/bands
+    # These tables will have index 1-40
     median_table = stats_table.get(('snr', 'median'), pd.DataFrame()).reindex(index=all_zones, columns=band_order)
     q1_table = stats_table.get(('snr', '<lambda_0>'), pd.DataFrame()).reindex(index=all_zones, columns=band_order)
     q3_table = stats_table.get(('snr', '<lambda_1>'), pd.DataFrame()).reindex(index=all_zones, columns=band_order)
@@ -718,6 +728,7 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
         
     # --- Reformat base table structure ---
     # Reformat the base structure for the final table (using median table as template for zones/bands layout)
+    # display_table_base will have index 0-39
     display_table_base = reformat_table(median_table.copy()) # Use copy to avoid modifying original
 
     if debug:
@@ -733,30 +744,48 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
     now = dt.datetime.now(dt.timezone.utc).strftime("%b %d, %Y %H:%M")
     caption_string = f"Last {int(span*60)} minutes SNR (Median [Q1,Q3]) of spots in S5 and around - refresh at {now} GMT"
 
-    # Create the final display table structure from the base
+    # Create the final display table structure from the base (index 0-39)
     combined_table = display_table_base.copy()
     
     # Tooltip content list
     tooltip_contents = []
 
-    # Create color mapping DataFrame with the same index and columns as the final combined_table
-    color_styles = pd.DataFrame('', index=combined_table.index, columns=combined_table.columns)
-    
-    # Iterate through bands and create combined display and colors
+    # --- Define Styling Function ---
+    # This function will be applied column-wise to the band columns
+    def style_band_column(band_series):
+        # band_series.name gives the band (e.g., '160')
+        # band_series.index gives the table index (0-39)
+        styles = pd.Series('', index=band_series.index)
+        band_name = band_series.name
+        for idx in band_series.index:
+            zone = idx + 1 # Zone 1-40
+            # Safely get median and count using the zone index (1-40)
+            median_snr = median_table.loc[zone, band_name] if zone in median_table.index and band_name in median_table.columns else np.nan
+            count = count_table.loc[zone, band_name] if zone in count_table.index and band_name in count_table.columns else 0
+            if not pd.isna(median_snr) and count > 0:
+                styles.loc[idx] = snr_to_color(median_snr, count)
+            else:
+                styles.loc[idx] = 'background-color: #ffffff; padding: 1px 2px;' # Default white
+        return styles
+
+    # --- Populate combined_table and Apply Styles ---
+    # Iterate through bands to populate combined_table
     for band in band_order:
         if band in median_table.columns: # Check if band exists in the data
             combined_results = []
-            # Use .iterrows() on median_table which has the full zone index (0-39)
-            for idx, row in median_table.iterrows(): 
-                zone = idx + 1 # Zone number (index is 0-based)
-                median_snr = row[band] # Get median from current row
-                # Safely get q1, q3, count using .get() on the column and .get() on the index
-                q1_snr = q1_table.get(band, pd.Series(dtype=float)).get(idx, np.nan)
-                q3_snr = q3_table.get(band, pd.Series(dtype=float)).get(idx, np.nan)
-                count = count_table.get(band, pd.Series(dtype=int)).get(idx, 0)
+            # Iterate using combined_table's index (0-39)
+            for idx in combined_table.index: 
+                zone = idx + 1 # Zone number is index + 1 (1-40)
+                
+                # Safely get median, q1, q3, count using .loc with the zone number (1-40) on the original stat tables
+                # Use .get() for safer access in case zone doesn't exist (though reindex should prevent this)
+                median_snr = median_table.get(band, pd.Series(dtype=float)).get(zone, np.nan)
+                q1_snr = q1_table.get(band, pd.Series(dtype=float)).get(zone, np.nan)
+                q3_snr = q3_table.get(band, pd.Series(dtype=float)).get(zone, np.nan)
+                count = count_table.get(band, pd.Series(dtype=int)).get(zone, 0)
 
                 # Get recent per-minute data for EMA slope and sparkline
-                # Filter the pre-calculated per_minute_snr DataFrame
+                # Filter the pre-calculated per_minute_snr DataFrame using zone (1-40)
                 recent_snr_data = per_minute_snr[
                     (per_minute_snr['zone'] == zone) & (per_minute_snr['band'] == band)
                 ].set_index('minute')['snr'].sort_index()
@@ -768,17 +797,9 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
                 # Generate sparkline from EMA series
                 sparkline_svg = generate_sparkline_svg(ema_series)
 
-                # Apply color based on median SNR and count
-                try:
-                    # Check median_snr is not NaN and count > 0 before applying color
-                    if not pd.isna(median_snr) and count > 0: 
-                        color_styles.at[idx, band] = snr_to_color(median_snr, count)
-                except (ValueError, TypeError):
-                    pass # Keep default style if error
-
                 # Combine display elements
                 result = combine_snr_count(
-                    zone, band, median_snr, q1_snr, q3_snr, count, ema_slope, sparkline_svg, df, idx
+                    zone, band, median_snr, q1_snr, q3_snr, count, ema_slope, sparkline_svg, df, idx # Pass idx (0-39) for tooltip ID
                 )
                 combined_results.append(result)
             
@@ -794,11 +815,8 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
     combined_table = combined_table[['zone_display'] + band_order]
     combined_table = combined_table.rename(columns={'zone_display': 'zone'})
     
-    # Ensure color_styles has the same columns as combined_table for direct application
-    color_styles = color_styles.reindex(columns=combined_table.columns, fill_value='')
-
-    # Apply the styles DataFrame directly using axis=None (elementwise)
-    styled_table = combined_table.style.apply(lambda x: color_styles, axis=None).set_caption(caption_string)
+    # Apply the styling function column-wise to the band columns
+    styled_table = combined_table.style.apply(style_band_column, axis=0, subset=band_order).set_caption(caption_string)
 
     # Apply other non-background properties separately
     styled_table.set_properties(subset=['zone'], **{'font-weight': 'bold'})
