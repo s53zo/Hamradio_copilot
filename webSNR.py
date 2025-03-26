@@ -613,7 +613,7 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
             }}
 
             .iqr-text {{
-                font-size: 0.9rem; /* Slightly smaller for IQR */
+                font-size: 0.65rem; /* Slightly smaller for IQR */
                 color: #888; /* Lighter color for IQR */
             }}
 
