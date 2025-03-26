@@ -12,43 +12,41 @@ import htmlmin
 import sqlite3
 import numpy as np
 import html
-from matplotlib.colors import LinearSegmentedColormap
+# Removed matplotlib import as LinearSegmentedColormap wasn't used
 from scipy.stats import linregress
 
 pd.set_option('display.max_columns', None)
 pd.set_option('display.max_rows', None)
 pd.set_option('display.width', 2000)
 
-parser = argparse.ArgumentParser(description='Analyze SNR and generate HTML report.')
+parser = argparse.ArgumentParser(description='Analyze SNR for S53M and generate HTML report.')
 parser.add_argument("-f", "--frequency", help="Specify how often data is collected (in minutes). Default = 1",
                     type=float, default=1)
-parser.add_argument("-l", "--lower",
-                    help="Specify the lower end of the data count threshold (empty square). Default = 5",
-                    type=int, default=5)
-parser.add_argument("-u", "--upper",
-                    help="Specify the upper end of the data count threshold (filled square). Default = 10",
-                    type=int, default=10)
+# Removed -l and -u as they are not used in the new logic
+# parser.add_argument("-l", "--lower", ...)
+# parser.add_argument("-u", "--upper", ...)
 parser.add_argument("-r", "--range", type=float, default=0.25,
                     help="Specify # of hours of data from current time to analyze. Default = 0.25")
 parser.add_argument("-o", "--output-folder", help="Specify the local folder to save the index_s53m.html file.",
                     default="local_html")
 parser.add_argument("--use-s3", action="store_true", help="Enable uploading to S3")
 parser.add_argument("-d", "--debug", action="store_true", help="Enable debugging output")
-parser.add_argument("--include-solar-data", action="store_true", help="Include fetching and presenting solar data")
+# Removed --include-solar-data as it wasn't implemented in either version
+# parser.add_argument("--include-solar-data", action="store_true", ...)
 args = parser.parse_args()
 frequency = args.frequency
-sparse = args.lower
-busy = args.upper
+# sparse = args.lower # Removed
+# busy = args.upper # Removed
 span = args.range
 output_folder = args.output_folder
 use_s3 = args.use_s3
 debug = args.debug
-include_solar_data = args.include_solar_data
+# include_solar_data = args.include_solar_data # Removed
 
 #band_order = ['160', '80', '40', '30', '20', '17', '15', '12', '10', '6']
 band_order = ['160', '80', '40', '20', '15', '10']
 
-# Mapping zone numbers to descriptions...
+# Mapping zone numbers to descriptions... (Keep the same map)
 zone_name_map = {
     1: 'Northwestern Zone of North America: KL (Alaska), VY1/VE8 Yukon, the Northwest and Nunavut Territories west of 102 degrees (Includes the islands of Victoria, Banks, Melville, and Prince Patrick).',
     2: 'Northeastern Zone of North America: VO2 Labrador, the portion of VE2 Quebec north of the 50th parallel, the VE8 Northwest and Nunavut Territories east of 102 degrees (Includes the islands of King Christian, King William, Prince of Wales, Somerset, Bathurst, Devon, Ellesmere, Baffin and the Melville and Boothia Peninsulas, excluding Akimiski Island).',
@@ -105,12 +103,14 @@ def get_aws_credentials():
 def upload_file_to_s3(file_name, bucket_name, acc_key, sec_key):
     """
     Uploads the html file to the AWS S3 bucket.
-    """ 
+    Specifically uploads as 'index_s53m.html'.
+    """
     creds = {
         'aws_access_key_id': acc_key,
         'aws_secret_access_key': sec_key
     }
     s3_client = boto3.client('s3', **creds)
+    # --- Keep S53M specific filename ---
     obj_name = 'index_s53m.html'
 
     try:
@@ -127,54 +127,79 @@ def upload_file_to_s3(file_name, bucket_name, acc_key, sec_key):
         print(f"An error occurred: {e}")
     quit(1)
 
+# --- New helper functions from 'new' code ---
+def to_superscript(n):
+    mapping = {
+        '-': '⁻', '0': '⁰', '1': '¹', '2': '²', '3': '³',
+        '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹'
+    }
+    return ''.join(mapping.get(ch, ch) for ch in str(n))
+
+def to_subscript(n):
+    mapping = {
+        '-': '₋', '0': '₀', '1': '₁', '2': '₂', '3': '₃',
+        '4': '₄', '5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉'
+    }
+    return ''.join(mapping.get(ch, ch) for ch in str(n))
+
+# --- Updated reformat_table from 'new' code ---
 def reformat_table(table):
     """
     Reformats the pivot table with improved zone tooltips.
+    Ensures the returned DataFrame has a standard 0-based index.
     """
     try:
-        # Create a base DataFrame with all zones
-        all_zones = pd.DataFrame({'zone': range(1, 41)})
-        
+        # Create a base DataFrame with all zones (1-40)
+        all_zones_df = pd.DataFrame({'zone': range(1, 41)})
+
         if table is None or table.empty:
             # Create zone_display with improved tooltip structure
-            all_zones['zone_display'] = all_zones['zone'].apply(
+            all_zones_df['zone_display'] = all_zones_df['zone'].apply(
                 lambda x: f'<div class="zone-tooltip" style="display: inline-block; width: 100%; text-align: center; cursor: help;" title="{zone_name_map.get(int(x), "Unknown Zone")}">{str(int(x)).zfill(2)}</div>'
             )
             for band in band_order:
-                all_zones[band] = ''
-            return all_zones
+                all_zones_df[band] = ''
+            # Reset index here to ensure 0-39 index
+            return all_zones_df.reset_index(drop=True)
 
-        # Flatten the pivot table
+        # Flatten the pivot table (which might have zone index 1-40)
         flattened = table.reset_index()
-        
-        # Merge with all_zones to ensure all zones are present
-        flattened = pd.merge(all_zones, flattened, on='zone', how='left')
-        
+
+        # Merge with all_zones_df to ensure all zones are present
+        flattened = pd.merge(all_zones_df, flattened, on='zone', how='left')
+
         # Create zone_display with improved tooltip structure
         flattened['zone_display'] = flattened['zone'].apply(
             lambda x: f'<div class="zone-tooltip" style="display: inline-block; width: 100%; text-align: center; cursor: help;" title="{zone_name_map.get(int(x), "Unknown Zone")}">{str(int(x)).zfill(2)}</div>'
         )
-        
-        # Sort by zone and reset index
+
+        # Sort by zone and reset index to ensure 0-39 index
         flattened = flattened.sort_values(by='zone').reset_index(drop=True)
-        
+
         # Ensure all band columns exist
         for band in band_order:
             if band not in flattened.columns:
                 flattened[band] = ''
-        
+
         # Select and order columns
         columns = ['zone', 'zone_display'] + band_order
         flattened = flattened[columns]
-        
+
         # Fill NaN values with empty strings
         flattened = flattened.fillna('')
-        
-        return flattened
+
+        return flattened # Returns DataFrame with index 0-39
     except Exception as e:
         print(f"Error in reformat_table: {str(e)}")
-        return all_zones
-      
+        # Return a default structure in case of error, ensuring 0-39 index
+        all_zones_df = pd.DataFrame({'zone': range(1, 41)})
+        all_zones_df['zone_display'] = all_zones_df['zone'].apply(
+            lambda x: f'<div class="zone-tooltip" style="display: inline-block; width: 100%; text-align: center; cursor: help;" title="Error">{str(int(x)).zfill(2)}</div>'
+        )
+        for band in band_order:
+             all_zones_df[band] = ''
+        return all_zones_df.reset_index(drop=True) # Ensure 0-39 index on error return
+
 def delete_old(df, time_hours):
     """
     Deletes entries older than the specified time range from the dataframe.
@@ -183,55 +208,104 @@ def delete_old(df, time_hours):
     df = df[df['timestamp'] >= day_ago].reset_index(drop=True)
     return df
 
-def slope_to_unicode(slope):
-    """
-    Converts a slope value to a corresponding Unicode character.
-    """
-    if -0.1 <= slope <= 0.1:
-        return '\u21D4'  # ⇔
-    elif 0.1 < slope <= 0.3:
-        return '\u21D7'  # ⇗
-    elif slope > 0.3:
-        return '\u21D1'  # ⇑
-    elif -0.3 <= slope < -0.1:
-        return '\u21D8'  # ⇘
-    elif slope < -0.3:
-        return '\u21D3'  # ⇓
-    else:
-        return ''
+# --- Removed old slope_to_unicode ---
 
-def compute_slope(df, zone, band):
+# --- Removed old compute_slope ---
+
+# --- Added compute_ema_slope from 'new' code ---
+def compute_ema_slope(df, zone, band, span_minutes=5):
     """
-    Computes the slope of SNR over time for a given zone and band.
+    Computes the slope of the Exponential Moving Average (EMA) of SNR over time.
+    Returns slope and the EMA series for sparkline.
     """
     relevant_spots = df[(df['zone'] == zone) & (df['band'] == band)].copy()
 
     if len(relevant_spots) < 2:
-        return np.nan
+        return np.nan, pd.Series(dtype=float) # Return NaN slope and empty series for sparkline
 
     relevant_spots.loc[:, 'minute'] = relevant_spots['timestamp'].dt.floor('min')
     avg_per_minute = relevant_spots.groupby('minute')['snr'].mean().reset_index()
 
     if len(avg_per_minute) < 2:
-        return np.nan
+        # Still return the (short) series for potential sparkline if needed
+        return np.nan, avg_per_minute.set_index('minute')['snr'].sort_index()
 
-    time_values = avg_per_minute['minute'].astype(np.int64) // 1e9 / 60
-    snr_values = avg_per_minute['snr']
+    # Ensure the index is datetime for EMA calculation
+    avg_per_minute = avg_per_minute.set_index('minute').sort_index()
+
+    # Calculate EMA
+    # Adjust span based on expected data frequency (e.g., 1 minute)
+    ema_snr = avg_per_minute['snr'].ewm(span=span_minutes, adjust=False).mean()
+
+    # Prepare data for regression on EMA
+    time_values = ema_snr.index.astype(np.int64) // 1e9 / 60 # Convert to minutes
+    snr_values_ema = ema_snr.values
+
+    if len(time_values) < 2 or time_values.nunique() == 1:
+        return np.nan, ema_snr # Return NaN slope but still return EMA data for sparkline
 
     try:
-        slope, _, _, _, _ = linregress(time_values, snr_values)
-        return slope
+        slope, _, _, _, _ = linregress(time_values, snr_values_ema)
+        return slope, ema_snr # Return slope and EMA data
     except Exception as e:
-        print(f"Error calculating slope: {e}")
-        return np.nan
+        print(f"Error calculating EMA slope: {e}")
+        return np.nan, ema_snr # Return NaN slope but still return EMA data
 
+# --- Added generate_sparkline_svg from 'new' code ---
+def generate_sparkline_svg(data, trend_slope, width=30, height=15, stroke_width=1, default_color='black'):
+    """
+    Generates an SVG sparkline from a pandas Series of data, coloring the last segment based on trend.
+    """
+    if data.empty or len(data) < 2:
+        return ""
+
+    y = data.dropna().values # Drop NaN values before plotting
+    if len(y) < 2:
+        return ""
+
+    x = np.arange(len(y))
+
+    # Normalize data
+    min_y, max_y = np.min(y), np.max(y)
+    range_y = max_y - min_y if max_y > min_y else 1
+    # Add small epsilon to prevent division by zero if range_y is 0
+    range_y = range_y if range_y > 1e-9 else 1
+    norm_y = (y - min_y) / range_y * (height - stroke_width * 2) + stroke_width
+
+    min_x, max_x = np.min(x), np.max(x)
+    range_x = max_x - min_x if max_x > min_x else 1
+    # Add small epsilon to prevent division by zero if range_x is 0
+    range_x = range_x if range_x > 1e-9 else 1
+    norm_x = (x - min_x) / range_x * (width - stroke_width * 2) + stroke_width
+
+    # Determine trend color
+    if pd.isna(trend_slope) or (-0.1 <= trend_slope <= 0.1):
+        trend_color = default_color  # black or grey for stable/NaN
+    elif trend_slope > 0.1:
+        trend_color = '#28a745'  # green
+    else: # slope < -0.1
+        trend_color = '#dc3545'  # red
+
+    # Create points strings
+    # all_points = " ".join([f"{px:.2f},{height - py:.2f}" for px, py in zip(norm_x, norm_y)]) # Not needed for two-polyline approach
+    main_points = " ".join([f"{px:.2f},{height - py:.2f}" for px, py in zip(norm_x[:-1], norm_y[:-1])]) # All except last point
+    last_segment_points = " ".join([f"{px:.2f},{height - py:.2f}" for px, py in zip(norm_x[-2:], norm_y[-2:])]) # Last two points
+
+    # Generate SVG with two polylines
+    svg_content = f'<polyline points="{main_points}" fill="none" stroke="{default_color}" stroke-width="{stroke_width}"/>'
+    svg_content += f'<polyline points="{last_segment_points}" fill="none" stroke="{trend_color}" stroke-width="{stroke_width}"/>'
+
+    return f'<svg width="{width}" height="{height}" style="vertical-align: middle; margin-right: 3px;">{svg_content}</svg>'
+
+# --- Keep intensity and color functions ---
 def get_intensity(count, max_count=1000):
     """
     Calculate color intensity using exponential scaling.
     """
     min_intensity = 0.2
     max_additional = 0.8
-    a = 5.0 / max_count
+    # Increased scaling factor 'a' slightly to make color saturation change faster at lower counts
+    a = 10.0 / max_count # Was 5.0
     intensity = min_intensity + max_additional * (1 - np.exp(-a * count))
     return intensity
 
@@ -241,7 +315,7 @@ def hsl_to_rgb(h, s, l):
     """
     if s == 0:
         return (l, l, l)
-    
+
     def hue_to_rgb(p, q, t):
         if t < 0:
             t += 1
@@ -269,8 +343,8 @@ def snr_to_color(val, count):
     Convert SNR value and station count to color.
     """
     if pd.isna(val) or val == ' ':
-        return 'background-color: #ffffff; padding: 1px 2px;'
-    
+        return 'background-color: #ffffff; padding: 1px 2px;' # Kept padding for consistency
+
     try:
         val = float(val)
         # Base color selection based on SNR
@@ -282,117 +356,86 @@ def snr_to_color(val, count):
             hue = 200  # blue
         else:
             hue = 220  # dark blue
-                
-        # Get intensity based on station count
+
+        # Get intensity based on station count using updated get_intensity
         intensity = get_intensity(count)
-            
+
         # Adjust lightness to avoid too dark colors
         sat = 0.8  # 80% saturation
         min_lightness = 0.3  # Minimum lightness (30%)
         max_lightness = 0.7  # Maximum lightness (70%)
         lightness = min_lightness + intensity * (max_lightness - min_lightness)
-            
+
         # Convert HSL to RGB
         rgb_color = hsl_to_rgb(hue/360, sat, lightness)
         hex_color = '#{:02x}{:02x}{:02x}'.format(*[int(x * 255) for x in rgb_color])
-            
+
+        # Keep padding and alignment from 'new' version's styling
         return f'background-color: {hex_color}; padding: 1px 2px; text-align: center; font-size: 0.85rem;'
     except ValueError:
         return 'background-color: #ffffff; padding: 1px 2px;'
 
 
-def combine_snr_count(mean_table_row, count_table, band, df, row_index):
+# --- Updated combine_snr_count from 'new' code ---
+def combine_snr_count(zone, band, median_snr, q1_snr, q3_snr, count, ema_slope, sparkline_svg, df, row_index):
     """
-    Combines SNR and count data with proper empty value handling.
+    Combines SNR stats (Median, IQR), count, and sparkline (with embedded trend) for table cell display.
     """
     try:
-        zone = mean_table_row['zone']
-        
-        # Handle SNR value - convert to float or None
-        snr = mean_table_row[band] if band in mean_table_row else None
-        if isinstance(snr, str) and snr.strip() == '':
-            snr = None
-        elif snr is not None:
-            try:
-                snr = float(snr)
-            except (ValueError, TypeError):
-                snr = None
-        
-        # Handle count value - convert to int or 0
-        count = count_table.at[row_index, band] if band in count_table.columns else 0
-        if pd.isna(count) or (isinstance(count, str) and count.strip() == ''):
-            count = 0
+        # Format Median and IQR
+        if pd.isna(median_snr):
+            snr_display = "N/A"
         else:
-            try:
-                count = int(count)
-            except (ValueError, TypeError):
-                count = 0
-
-        # Generate display text
-        if snr is None and count == 0:
-            return "", None
-        elif snr is None:
-            display_text = f'N/A <span class="count-text">({count})</span>'
-        else:
-            display_text = f'{int(round(snr))} <span class="count-text">({count})</span>'
-
-        # Compute slope and get arrow only if we have data
-        if snr is not None and count > 0:
-            slope = compute_slope(df, zone, band)
-            slope_arrow = slope_to_unicode(slope)
-
-            # Determine arrow color
-            if pd.isna(slope) or (-0.1 <= slope <= 0.1):
-                arrow_color = '#000000'  # black
-            elif slope > 0.1:
-                arrow_color = '#28a745'  # green
+            median_snr_int = int(round(median_snr))
+            if pd.isna(q1_snr) or pd.isna(q3_snr):
+                snr_display = f"{median_snr_int}"
             else:
-                arrow_color = '#dc3545'  # red
+                q1_int = int(round(q1_snr))
+                q3_int = int(round(q3_snr))
+                # Use Unicode superscript and subscript with the Unicode fraction slash (⁄)
+                snr_display = f"{median_snr_int} <span class='iqr-text'>{to_superscript(q1_int)}⁄{to_subscript(q3_int)}</span>"
 
-            styled_arrow = f'<span style="font-size: 0.9rem; color: {arrow_color};">{slope_arrow}</span>'
-            display_text_with_arrow = f'{display_text} {styled_arrow}'
+        # Format count
+        count_display = f'<span class="count-text">({count})</span>'
+
+        # Combine SNR and count display
+        display_text = f"{snr_display} {count_display}"
+
+        # Combine sparkline and text
+        if count > 0:
+              cell_content = f'{sparkline_svg}{display_text}'
         else:
-            display_text_with_arrow = display_text
+              cell_content = "" # Empty if no count
 
-        # Get spotted stations only if we have data
+        # Generate tooltip content (spotted stations) - only if count > 0
+        tooltip_data = None
         if count > 0:
             relevant_spots = df[(df['zone'] == zone) & (df['band'] == band)].copy()
             unique_stations = sorted(set(relevant_spots['spotted_station']))
-            
-            tooltip_id = f"tooltip_{row_index}_{band}"
-         
+
+            tooltip_id = f"tooltip_{row_index}_{band}" # Use row_index (0-39) for unique tooltip ID
             tooltip_content_html = '<div class="station-list">'
             for station in unique_stations:
-                display_station = station.replace('.', '/') #to avoid KH0.AA3B and have KH0/AA3B
+                display_station = station.replace('.', '/') # Keep existing logic
                 tooltip_content_html += f'<div>{html.escape(display_station)}</div>'
             tooltip_content_html += '</div>'
+            tooltip_data = (tooltip_id, tooltip_content_html)
 
-            cell_html = f'<span class="tooltip" data-tooltip-content="#{tooltip_id}">{display_text_with_arrow}</span>'
-            
-            return cell_html, (tooltip_id, tooltip_content_html)
-        else:
-            return display_text_with_arrow, None
+            # Wrap cell content in tooltip span if there's tooltip data
+            cell_content = f'<span class="tooltip" data-tooltip-content="#{tooltip_id}">{cell_content}</span>'
+
+        return cell_content, tooltip_data
 
     except Exception as e:
-        print(f"Error processing zone {zone if 'zone' in locals() else 'unknown'} and band {band}: {str(e)}")
+        print(f"Error processing zone {zone} and band {band}: {str(e)}")
         return "", None
 
-def generate_empty_cell_style(total_zones=40):
-    """Generate CSS for empty cells for all zones"""
-    empty_cell_styles = []
-    for i in range(total_zones):
-        for band in band_order:
-            empty_cell_styles.append(f"""
-            #T_table_row{i}_col{band} {{
-                background-color: #ffffff;
-                text-align: center;
-            }}
-            """)
-    return "\n".join(empty_cell_styles)
+# --- Removed generate_empty_cell_style ---
 
+# --- Updated generate_html_template from 'new' code ---
 def generate_html_template(snr_table_html, tooltip_content_html, caption_string):
     """
-    Generates HTML template with improved tooltip styles.
+    Generates HTML template with improved tooltip styles and sparkline CSS.
     """
     template = f"""
     <!DOCTYPE html>
@@ -400,7 +443,7 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
     <head>
         <meta charset="UTF-8">
         <meta http-equiv="refresh" content="60">
-        <title>SNR Report</title>
+        <title>S53M SNR Report</title> {/* Changed Title */}
         <style>
             body {{
                 margin: 0;
@@ -409,15 +452,16 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
                 font-size: 0.85rem;
                 background: #ffffff;
             }}
-    
+
             table {{
                 border-collapse: collapse;
                 width: 100%;
-                max-width: 800px;
+                /* Adjusted max-width based on new template */
+                max-width: 1100px;
                 margin: 0 auto;
                 table-layout: fixed;
             }}
-    
+
             th {{
                 position: sticky;
                 top: 0;
@@ -427,23 +471,29 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
                 font-size: 0.85rem;
                 border: 1px solid #ddd;
                 font-weight: bold;
+                white-space: nowrap; /* Added from new template */
             }}
-    
+
             td {{
-                padding: 1px 2px;
+                /* Adjusted padding based on new template */
+                padding: 1px 1px;
                 border: 1px solid #ddd;
                 text-align: center;
                 white-space: nowrap;
                 overflow: hidden;
                 text-overflow: ellipsis;
+                /* Ensure SVG and text align */
+                vertical-align: middle;
             }}
-    
+
             tr:nth-child(even) {{
                 background-color: rgba(0, 0, 0, 0.02);
             }}
-    
+
             td:first-child {{
-                width: 35px;
+                /* Adjusted width based on new template */
+                width: 25px;
+                min-width: 25px; /* Added min-width */
                 font-weight: bold;
                 cursor: help;
                 padding: 0;
@@ -453,12 +503,18 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
                 padding: 1px 2px;
                 background-color: rgba(0, 0, 0, 0.02);
                 transition: background-color 0.2s;
+                /* Ensure div fills cell */
+                display: inline-block;
+                width: 100%;
+                text-align: center;
+                cursor: help;
             }}
 
             .zone-tooltip:hover {{
                 background-color: rgba(0, 0, 0, 0.05);
             }}
-               
+
+            /* Zone tooltip specific tippy styles */
             .tippy-box[data-theme~='zone'] {{
                 background-color: #333;
                 color: white;
@@ -471,11 +527,12 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
             .tippy-box[data-theme~='zone'] .tippy-content {{
                 padding: 8px 12px;
             }}
-    
+
             .tippy-box[data-theme~='zone'] .tippy-arrow {{
                 color: #333;
             }}
-    
+
+            /* General tippy content style (for station lists) */
             .tippy-content {{
                 padding: 0 !important;
                 font-size: 0.8rem;
@@ -486,6 +543,10 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
 
             .tooltip {{
                 cursor: pointer;
+                /* Allow tooltip span to contain block/inline-block elements */
+                display: inline-block;
+                width: 100%;
+                text-align: center; /* Center content within the span */
             }}
 
             .station-list {{
@@ -505,11 +566,11 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
                 overflow: hidden;
                 text-overflow: ellipsis;
             }}
-    
+
             .tooltip_templates {{
                 display: none;
             }}
-    
+
             caption {{
                 padding: 2px;
                 font-size: 0.85rem;
@@ -517,22 +578,25 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
             }}
 
             .count-text {{
-                font-size: 0.7rem;
+                /* Adjusted font-size based on new template */
+                font-size: 0.6rem;
                 color: #666;
             }}
 
-            .legend {{
-                position: fixed;
-                bottom: 20px;
-                left: 20px;
-                right: 20px;
-                background: rgba(255, 255, 255, 0.95);
-                padding: 15px;
-                border-radius: 8px;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-                z-index: 1000;
-                text-align: center;
+            /* Style for IQR superscript/subscript */
+            .iqr-text {{
+                font-size: 0.65rem; /* Slightly smaller for IQR */
+                color: #888; /* Lighter color for IQR */
             }}
+
+            /* Style for sparkline SVG */
+            td svg {{
+                vertical-align: middle;
+                margin-right: 3px; /* Space between sparkline and text */
+            }}
+
+            /* Removed legend styles as it wasn't present in either original */
+            /* .legend {{ ... }} */
         </style>
         <link rel="stylesheet" href="https://unpkg.com/tippy.js@6/animations/scale.css">
     </head>
@@ -540,6 +604,7 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
         {snr_table_html}
         {tooltip_content_html}
         <div style="text-align: center; margin-top: 20px;">
+             {/* Kept original links */}
             <small>Make your own SNR overview: <a href="https://github.com/s53zo/Hamradio_copilot">https://github.com/s53zo/Hamradio_copilot</a> <a href="https://azure.s53m.com/copilot/index.html">ALL RX</a> <a href="https://azure.s53m.com/copilot/index_s53m.html">S53M RX only</a></small>
         </div>
 
@@ -547,18 +612,36 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
         <script src="https://unpkg.com/tippy.js@6/dist/tippy-bundle.umd.min.js"></script>
         <script>
             document.addEventListener('DOMContentLoaded', function() {{
+                // Tooltips for station lists (cells)
                 tippy('.tooltip', {{
                     content(reference) {{
                         const id = reference.getAttribute('data-tooltip-content');
                         const template = document.querySelector(id);
-                        return template.innerHTML;
+                        return template ? template.innerHTML : 'Loading...'; // Added fallback
                     }},
                     allowHTML: true,
-                    maxWidth: 'none',
+                    maxWidth: 'none', // Changed from 350 to none
                     interactive: true,
                     animation: 'scale',
                     placement: 'top',
-                    theme: 'light',
+                    theme: 'light', // Kept light theme for stations
+                     trigger: 'mouseenter focus', // Added focus trigger
+                    appendTo: () => document.body, // Appends to body to avoid table clipping issues
+                }});
+
+                // Tooltips for zone descriptions (first column) - using standard title attribute and a different theme
+                tippy('.zone-tooltip', {{
+                    content(reference) {{
+                        return reference.getAttribute('title');
+                    }},
+                    allowHTML: false, // Plain text description
+                    maxWidth: 350, // Max width for zone description
+                    interactive: false,
+                    animation: 'scale',
+                    placement: 'right', // Place to the right of the zone number
+                    theme: 'zone', // Use the custom 'zone' theme defined in CSS
+                    trigger: 'mouseenter focus', // Added focus trigger
+                    appendTo: () => document.body, // Appends to body
                 }});
             }});
         </script>
@@ -567,16 +650,17 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
     """
     return template
 
-def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False):
+# --- Main execution function (run) - Heavily modified based on 'new' code logic ---
+def run(access_key=None, secret_key=None, s3_buck=None): # Removed include_solar_data param
     # Connect to the SQLite database
     conn = sqlite3.connect('callsigns.db')
-  
-    # Read data from the SQLite table `callsigns` into a pandas DataFrame
+
+    # --- Keep S53M specific SQL query ---
     query = """
     SELECT zone, band, CAST(snr AS FLOAT) as snr, timestamp, spotter, spotted_station
     FROM callsigns WHERE spotter = 'S53M'
     """
-    
+
     try:
         df = pd.read_sql_query(
             query,
@@ -589,20 +673,33 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
                 'spotted_station': 'str'
             }
         )
-        
+
         # Convert 'timestamp' from UNIX timestamp (seconds) to datetime with UTC timezone
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s', utc=True, errors='coerce')
+        df.dropna(subset=['timestamp', 'zone'], inplace=True) # Drop rows where conversion failed or zone is missing
+
     except Exception as e:
         print(f"Error: Unable to read data from the SQLite database. {e}")
         return
     finally:
         conn.close()
 
+    if df.empty:
+        print("No data found for S53M in the specified time range.")
+        # Optionally create an empty HTML file or skip update
+        # For now, just return
+        return
+
+
     if debug:
-        print("Initial DataFrame:")
+        print("Initial DataFrame (S53M only):")
         print(df.head())
 
     df = delete_old(df, span)
+
+    if df.empty:
+        print(f"No data found for S53M after filtering for the last {span} hours.")
+        return
 
     if debug:
         print(f"DataFrame after deleting entries older than {span} hours:")
@@ -611,6 +708,7 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
     # Set 'zone' as a categorical variable with categories from 1 to 40
     df['zone'] = df['zone'].astype(int)
     df['zone'] = df['zone'].astype('category')
+    # Use range(1, 41) directly if Int64 conversion already happened
     df['zone'] = df['zone'].cat.set_categories(range(1, 41))
 
     # Set 'band' as a categorical variable with desired order
@@ -618,100 +716,126 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
     df['band'] = df['band'].astype('category')
     df['band'] = df['band'].cat.set_categories(band_order)
 
-    all_zones = pd.Index(range(1, 41), name='zone')
+    all_zones = pd.Index(range(1, 41), name='zone') # Index 1-40 for accessing data
 
-    # Create count table
-    count_table = df.groupby(['zone', 'band'], observed=True).agg(
-        count=('spotter', lambda x: len(set(zip(x, df.loc[x.index, 'spotted_station']))))
-    ).reset_index().pivot(
-        index='zone',
-        columns='band',
-        values='count'
-    ).reindex(all_zones, fill_value=0)
+    # --- Calculate Aggregated Stats (Median, IQR, Count) using new method ---
+    agg_funcs = {
+        'snr': ['median', lambda x: x.quantile(0.25), lambda x: x.quantile(0.75)],
+        # Use a unique name for the count aggregation
+        'spotter': [('unique_spots', lambda x: len(set(zip(x, df.loc[x.index, 'spotted_station']))))]
+    }
 
-    # Create mean table
-    mean_table = df.pivot_table(
-        values='snr',
-        index='zone',
-        columns='band',
-        aggfunc='median',
-        observed=True,
-        dropna=False
-    ).reindex(all_zones)
+    # Group, aggregate, and unstack by band
+    stats_table = df.groupby(['zone', 'band'], observed=True).agg(agg_funcs).unstack(level='band')
 
-    # Convert numeric columns to float
-    numeric_columns = mean_table.select_dtypes(include=['number']).columns
-    mean_table[numeric_columns] = mean_table[numeric_columns].astype('float')
+    # Select stats directly using MultiIndex columns and reindex to ensure all zones/bands
+    # These tables will have index 1-40
+    # Use .get() with default empty DataFrame to handle cases where 'snr' or 'spotter' columns might be missing if df was empty initially
+    median_table = stats_table.get(('snr', 'median'), pd.DataFrame()).reindex(index=all_zones, columns=band_order)
+    q1_table = stats_table.get(('snr', '<lambda_0>'), pd.DataFrame()).reindex(index=all_zones, columns=band_order)
+    q3_table = stats_table.get(('snr', '<lambda_1>'), pd.DataFrame()).reindex(index=all_zones, columns=band_order)
+    count_table = stats_table.get(('spotter', 'unique_spots'), pd.DataFrame()).reindex(index=all_zones, columns=band_order).fillna(0).astype(int)
 
-    # Ensure both tables have the same index
-    all_zones = sorted(set(count_table.index) | set(mean_table.index))
-    count_table = count_table.reindex(all_zones, fill_value=0)
-    mean_table = mean_table.reindex(all_zones)
+    # Convert numeric columns to float for median/q1/q3 tables
+    median_table = median_table.astype(float)
+    q1_table = q1_table.astype(float)
+    q3_table = q3_table.astype(float)
 
-    # Reformat the tables
-    count_table = reformat_table(count_table)
-    mean_table = reformat_table(mean_table)
+
+    # --- Prepare data for EMA slope and Sparklines (Not needed separately, done inside loop) ---
+    # Removed pre-calculation of per_minute_snr - will filter df directly in loop
+
+    # --- Reformat base table structure ---
+    # display_table_base will have index 0-39
+    display_table_base = reformat_table(median_table.copy()) # Use copy to avoid modifying original
 
     if debug:
-        print("Count Table:")
+        print("Count Table (S53M):")
         print(count_table.head())
-        print("Mean Table:")
-        print(mean_table.head())
+        print("Median Table (S53M):")
+        print(median_table.head())
+        # print("Q1 Table (S53M):") # Optionally print Q1/Q3
+        # print(q1_table.head())
+        # print("Q3 Table (S53M):")
+        # print(q3_table.head())
 
     now = dt.datetime.now(dt.timezone.utc).strftime("%b %d, %Y %H:%M")
-    caption_string = f"Last {int(span*60)} minutes SNR of spots heard at S53M - refresh at {now} GMT"
+    # --- Keep S53M specific caption ---
+    caption_string = f"Last {int(span*60)} minutes SNR (Median [Q1⁄Q3]) of spots heard at S53M - refresh at {now} GMT"
 
-    # Combine mean_table and count_table into a single table with desired cell content
-    combined_table = mean_table.copy()
-    
+    # Create the final display table structure from the base (index 0-39)
+    combined_table = display_table_base.copy()
+
     # Tooltip content list
     tooltip_contents = []
 
-    # Create color mapping for each cell
-    color_styles = pd.DataFrame('', index=mean_table.index, columns=mean_table.columns)
-    
-    # Iterate through bands and create combined display and colors
+    # --- Pre-calculate styles using new method ---
+    # Create styles DataFrame matching combined_table structure (index 0-39, columns including 'zone', 'zone_display')
+    styles_df = pd.DataFrame('', index=combined_table.index, columns=combined_table.columns)
+    # Set default white background for all cells initially
+    for col in styles_df.columns:
+         styles_df[col] = 'background-color: #ffffff; padding: 1px 2px;' # Keep padding
+
+    # --- Populate combined_table and styles_df ---
     for band in band_order:
-        if band in mean_table.columns:
+        if band in median_table.columns: # Check if band exists in the data
             combined_results = []
-            for idx, row in mean_table.iterrows():
-                # Get SNR value and count
-                snr = row[band] if band in row else None
-                count = count_table.at[idx, band] if band in count_table.columns else 0
-                
-                try:
-                    count = int(count) if count != '' else 0
-                    if not pd.isna(snr) and count > 0:
-                        color_styles.at[idx, band] = snr_to_color(snr, count)
-                except (ValueError, TypeError):
-                    count = 0
-                
-                # Combine SNR and count display
-                result = combine_snr_count(row, count_table, band, df, idx)
+            # Iterate using combined_table's index (0-39)
+            for idx in combined_table.index:
+                zone = idx + 1 # Zone number is index + 1 (1-40)
+
+                # Safely get median, q1, q3, count using .loc with the zone number (1-40) on the original stat tables
+                # Using .get() on the Series for zone access provides default if zone missing (though reindex should prevent this)
+                median_snr = median_table.get(band, pd.Series(dtype=float)).get(zone, np.nan)
+                q1_snr = q1_table.get(band, pd.Series(dtype=float)).get(zone, np.nan)
+                q3_snr = q3_table.get(band, pd.Series(dtype=float)).get(zone, np.nan)
+                count = count_table.get(band, pd.Series(dtype=int)).get(zone, 0)
+
+                # Calculate EMA slope and get EMA series using the main filtered df
+                # compute_ema_slope handles filtering internally now
+                ema_slope, ema_series = compute_ema_slope(df, zone, band)
+
+                # Generate sparkline from EMA series, passing slope for trend coloring
+                sparkline_svg = generate_sparkline_svg(ema_series, trend_slope=ema_slope)
+
+                # Combine display elements using the new function
+                result = combine_snr_count(
+                    zone, band, median_snr, q1_snr, q3_snr, count, ema_slope, sparkline_svg, df, idx # Pass idx (0-39) for tooltip ID
+                )
                 combined_results.append(result)
-            
+
+                # Calculate and store style string in styles_df using index 'idx' (0-39)
+                if not pd.isna(median_snr) and count > 0:
+                    styles_df.loc[idx, band] = snr_to_color(median_snr, count)
+                # else: style remains default white
+
             combined_table[band] = [result[0] for result in combined_results]
             tooltip_contents.extend([content for _, content in combined_results if content])
         else:
-            combined_table[band] = ' '
+            combined_table[band] = ' ' # Ensure column exists even if no data
+            styles_df[band] = 'background-color: #ffffff; padding: 1px 2px;' # Ensure style column exists
 
-    # Handle 'zone' column separately
-    if 'zone' in combined_table.columns and 'zone' in mean_table.columns:
-        combined_table['zone'] = mean_table['zone']
-        combined_table['zone_display'] = mean_table['zone_display']
+    # Handle 'zone' column separately (already done in display_table_base via reformat_table)
+    # combined_table['zone_display'] = display_table_base['zone_display'] # Redundant
 
     # Ensure the columns are ordered as per band_order
     combined_table = combined_table[['zone_display'] + band_order]
     combined_table = combined_table.rename(columns={'zone_display': 'zone'})
-    color_styles = color_styles[band_order]  # Match columns with combined_table
 
-    # Apply the styles to the combined table
-    styled_table = combined_table.style.apply(lambda x: color_styles, axis=None).set_caption(caption_string)
+    # Ensure styles_df has the correct columns ('zone' + band_order) matching combined_table
+    styles_df = styles_df.reindex(columns=combined_table.columns, fill_value='background-color: #ffffff; padding: 1px 2px;')
+    # Set default style for the 'zone' column (no background color, just structure)
+    styles_df['zone'] = ''
 
+    # --- Apply Styling using new method ---
+    # Apply the styles DataFrame directly using axis=None (elementwise)
+    styled_table = combined_table.style.apply(lambda x: styles_df, axis=None).set_caption(caption_string)
+
+    # Apply other non-background properties separately
     styled_table.set_properties(subset=['zone'], **{'font-weight': 'bold'})
-    styled_table.set_properties(**{'text-align': 'center'})
+    # styled_table.set_properties(**{'text-align': 'center'}) # This is handled by CSS / cell content now
 
-    # Set table styles
+    # Set table styles (using styles from 'new' template)
     styled_table.set_table_styles([
         {'selector': 'caption', 'props': [
             ('font-size', '0.85rem'),
@@ -724,68 +848,78 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
             ('position', 'sticky'),
             ('top', '0'),
             ('background-color', 'rgba(255, 255, 255, 0.95)'),
-            ('z-index', '1'),
+            ('z-index', '10'), # Increased z-index slightly
             ('font-weight', 'bold'),
             ('white-space', 'nowrap')
         ]},
         {'selector': 'td', 'props': [
-            ('padding', '1px 2px'),
+            ('padding', '1px 1px'), # Adjusted padding
             ('font-size', '0.85rem'),
-            ('white-space', 'nowrap')
+            ('white-space', 'nowrap'),
+            ('vertical-align', 'middle') # Ensure alignment
         ]},
         {'selector': 'td:first-child', 'props': [
             ('font-weight', 'bold'),
-            ('width', '35px'),
-            ('min-width', '35px')
+            ('width', '25px'),      # Adjusted width
+            ('min-width', '25px')   # Adjusted width
+            # padding is 0 via CSS
         ]}
     ])
 
     # Convert to HTML
-    html_table = styled_table.hide(axis="index").to_html()
+    html_table = styled_table.hide(axis="index").to_html(escape=False) # escape=False to render HTML in cells
     html_table = html_table.replace(
         '<table ',
-        '<table style="width: 100%; max-width: 800px; margin: 0 auto; table-layout: fixed;" '
+        # Use max-width from new template
+        '<table style="width: 100%; max-width: 1100px; margin: 0 auto; table-layout: fixed;" '
     )
 
     # Build tooltip content HTML
-    tooltip_content_html = ''
+    tooltip_content_html = '<div class="tooltip_templates">' # Wrap all templates in one hidden div
     for tooltip_id, content_html in tooltip_contents:
         tooltip_content_html += f'''
-        <div class="tooltip_templates">
             <div id="{tooltip_id}">
                 {content_html}
             </div>
-        </div>
         '''
+    tooltip_content_html += '</div>'
 
-    # Generate final HTML
+
+    # Generate final HTML using the updated template
     final_html = generate_html_template(html_table, tooltip_content_html, caption_string)
 
     # Minify the HTML
     minified_html = htmlmin.minify(final_html, remove_empty_space=True, remove_comments=True)
 
-    # Save files
-    with open("index_s53m.html", "w", encoding="utf-8") as text_file:
+    # --- Save files using S53M specific filename ---
+    s53m_filename = "index_s53m.html"
+    with open(s53m_filename, "w", encoding="utf-8") as text_file:
         text_file.write(minified_html)
 
     os.makedirs(output_folder, exist_ok=True)
-    local_file_path = os.path.join(output_folder, "index_s53m.html")
+    local_file_path = os.path.join(output_folder, s53m_filename)
     with open(local_file_path, "w", encoding="utf-8") as local_file:
         local_file.write(minified_html)
 
-    print(f"Table updated in index_s53m.html and saved to '{output_folder}' at {now}")
-    
+    print(f"Table updated in {s53m_filename} and saved to '{output_folder}' at {now}")
+
     if use_s3:
         if not (access_key and secret_key and s3_buck):
+            # Consider handling missing credentials more robustly if needed
+            # For now, assuming they are provided if --use-s3 is set or prompted later
+            print("Warning: S3 upload enabled but credentials not provided initially.")
             access_key = input("Enter your AWS Access Key ID: ")
             secret_key = input("Enter your AWS Secret Access Key: ")
             s3_buck = input("Enter the name of the S3 Bucket you'd like to write to: ")
-        upload_file_to_s3("index_s53m.html", s3_buck, access_key, secret_key)
+        # Upload the correct local file
+        upload_file_to_s3(local_file_path, s3_buck, access_key, secret_key)
+
 
 if __name__ == '__main__':
     time_to_wait = frequency * 60  # Time to wait in between re-running program
 
     if use_s3:
+        # Prompt for credentials at the start if using S3 and not provided via env vars/config
         credentials = get_aws_credentials()
         aws_access_key = credentials['aws_access_key_id']
         secret_access_key = credentials['aws_secret_access_key']
@@ -796,5 +930,7 @@ if __name__ == '__main__':
         s3_bucket = None
 
     while True:
-        run(aws_access_key, secret_access_key, s3_bucket, include_solar_data)
+        # Pass credentials (or None) to run function
+        run(aws_access_key, secret_access_key, s3_bucket)
+        print(f"Waiting for {frequency} minutes...")
         time.sleep(time_to_wait)
