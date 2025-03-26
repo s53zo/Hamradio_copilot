@@ -127,6 +127,20 @@ def upload_file_to_s3(file_name, bucket_name, acc_key, sec_key):
         print(f"An error occurred: {e}")
     quit(1)
 
+def to_superscript(n):
+    mapping = {
+        '-': '⁻', '0': '⁰', '1': '¹', '2': '²', '3': '³',
+        '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹'
+    }
+    return ''.join(mapping.get(ch, ch) for ch in str(n))
+
+def to_subscript(n):
+    mapping = {
+        '-': '₋', '0': '₀', '1': '₁', '2': '₂', '3': '₃',
+        '4': '₄', '5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉'
+    }
+    return ''.join(mapping.get(ch, ch) for ch in str(n))
+
 def reformat_table(table):
     """
     Reformats the pivot table with improved zone tooltips.
@@ -411,7 +425,8 @@ def combine_snr_count(zone, band, median_snr, q1_snr, q3_snr, count, ema_slope, 
             else:
                 q1_int = int(round(q1_snr))
                 q3_int = int(round(q3_snr))
-                snr_display = f"{median_snr_int} <span class='iqr-text'>[{q1_int}/{q3_int}]</span>"
+                # Use Unicode superscript and subscript with the Unicode fraction slash (⁄)
+                snr_display = f"{median_snr_int} <span class='iqr-text'>{to_superscript(q1_int)}⁄{to_subscript(q3_int)}</span>"
 
         # Format count
         count_display = f'<span class="count-text">({count})</span>'
