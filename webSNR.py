@@ -499,7 +499,7 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
             table {{
                 border-collapse: collapse;
                 width: 100%;
-                max-width: 800px;
+                max-width: 1000px;
                 margin: 0 auto;
                 table-layout: fixed;
             }}
@@ -520,7 +520,6 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
                 border: 1px solid #ddd;
                 text-align: center;
                 white-space: nowrap;
-                min-width: 50px;
                 overflow: hidden;
                 text-overflow: ellipsis;
                 /* Ensure SVG and text align */
