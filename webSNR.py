@@ -531,7 +531,7 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
             }}
     
             td:first-child {{
-                width: 35px;
+                width: 25px;
                 font-weight: bold;
                 cursor: help;
                 padding: 0;
@@ -863,8 +863,8 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
         ]},
         {'selector': 'td:first-child', 'props': [
             ('font-weight', 'bold'),
-            ('width', '35px'),
-            ('min-width', '35px')
+            ('width', '25px'),
+            ('min-width', '25px')
         ]}
     ])
 
@@ -872,7 +872,7 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
     html_table = styled_table.hide(axis="index").to_html()
     html_table = html_table.replace(
         '<table ',
-        '<table style="width: 100%; max-width: 800px; margin: 0 auto; table-layout: fixed;" '
+        '<table style="width: 100%; max-width: 1100px; margin: 0 auto; table-layout: fixed;" '
     )
 
     # Build tooltip content HTML
