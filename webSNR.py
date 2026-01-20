@@ -995,6 +995,7 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
     
     # Group, aggregate, and unstack by band
     stats_table = df.groupby(['zone', 'band'], observed=True).agg(agg_funcs).unstack(level='band')
+    stats_table = stats_table.sort_index(axis=0).sort_index(axis=1)
     
     # Select stats directly using MultiIndex columns and reindex to ensure all zones/bands
     # These tables will have index 1-40
