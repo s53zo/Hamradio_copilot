@@ -601,8 +601,8 @@ def generate_html_template(data_url, asset_urls):
 
             th:first-child,
             td:first-child {
-                width: 32px;
-                min-width: 32px;
+                width: 36px;
+                min-width: 36px;
                 padding-left: 2px;
                 padding-right: 2px;
             }
