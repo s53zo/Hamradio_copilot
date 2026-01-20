@@ -508,6 +508,8 @@ def generate_html_template(data_url, asset_urls):
                 --card: rgba(255, 255, 255, 0.8);
                 --shadow: 0 16px 40px rgba(24, 18, 12, 0.15);
                 --row-height: 18px;
+                --header-height: 22px;
+                --zone-width: 36px;
                 --cell-font-size: 0.72rem;
                 --cell-line-height: 1.1;
                 --cell-pad-y: 1px;
@@ -577,7 +579,7 @@ def generate_html_template(data_url, asset_urls):
                 min-height: 0;
             }
 
-            .table-wrap {
+            .grid-wrap {
                 overflow-x: auto;
                 overflow-y: hidden;
                 border-radius: 12px;
@@ -585,58 +587,61 @@ def generate_html_template(data_url, asset_urls):
                 background: white;
                 flex: 1;
                 min-height: 0;
+                display: flex;
+                flex-direction: column;
             }
 
-            table {
-                border-collapse: collapse;
-                width: 100%;
+            .grid {
+                display: grid;
                 min-width: 720px;
-                table-layout: fixed;
                 font-size: var(--cell-font-size);
                 line-height: var(--cell-line-height);
             }
 
-            th, td {
-                border: 1px solid var(--grid);
-                padding: var(--cell-pad-y) var(--cell-pad-x);
-                text-align: center;
-                white-space: nowrap;
+            .grid.header {
+                grid-auto-rows: var(--header-height, 22px);
             }
 
-            tbody td {
+            .grid.body {
+                grid-auto-rows: var(--row-height);
+                flex: 1;
+                min-height: 0;
+                background: repeating-linear-gradient(
+                    180deg,
+                    rgba(15, 12, 9, 0.02) 0,
+                    rgba(15, 12, 9, 0.02) var(--row-height),
+                    transparent var(--row-height),
+                    transparent calc(var(--row-height) * 2)
+                );
+            }
+
+            .cell {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: var(--cell-pad-y) var(--cell-pad-x);
+                white-space: nowrap;
+                outline: 1px solid var(--grid);
+                outline-offset: -1px;
+                position: relative;
+                cursor: pointer;
+            }
+
+            .grid.header .cell {
+                font-weight: 600;
+                background: rgba(255, 255, 255, 0.96);
+                cursor: default;
+            }
+
+            .grid.body .cell {
                 height: var(--row-height);
                 overflow: hidden;
-            }
-
-            th {
-                position: sticky;
-                top: 0;
-                background: rgba(255, 255, 255, 0.96);
-                z-index: 5;
-                font-weight: 600;
-            }
-
-            tbody tr:nth-child(even) {
-                background: rgba(15, 12, 9, 0.02);
             }
 
             .zone-cell {
                 font-weight: 600;
                 color: var(--ink);
                 cursor: help;
-            }
-
-            th:first-child,
-            td:first-child {
-                width: 36px;
-                min-width: 36px;
-                padding-left: 2px;
-                padding-right: 2px;
-            }
-
-            .cell {
-                position: relative;
-                cursor: pointer;
             }
 
             .cell-content {
@@ -712,11 +717,9 @@ def generate_html_template(data_url, asset_urls):
                 <div class="meta" id="meta">Loading…</div>
             </div>
             <div class="panel">
-                <div class="table-wrap">
-                    <table id="snr-table">
-                        <thead></thead>
-                        <tbody></tbody>
-                    </table>
+                <div class="grid-wrap">
+                    <div class="grid header" id="snr-header"></div>
+                    <div class="grid body" id="snr-body"></div>
                 </div>
                 <div class="legend" id="legend"></div>
                 <div class="footer">
@@ -834,34 +837,44 @@ def generate_html_template(data_url, asset_urls):
             };
 
             const buildTable = (data) => {
-                const thead = document.querySelector("#snr-table thead");
-                const tbody = document.querySelector("#snr-table tbody");
-                thead.innerHTML = "";
-                tbody.innerHTML = "";
+                const header = document.getElementById("snr-header");
+                const body = document.getElementById("snr-body");
+                const template = `var(--zone-width) repeat(${data.band_order.length}, minmax(0, 1fr))`;
+                header.style.gridTemplateColumns = template;
+                body.style.gridTemplateColumns = template;
+                header.innerHTML = "";
+                body.innerHTML = "";
 
-                const headerRow = document.createElement("tr");
-                headerRow.innerHTML = `<th>Zone</th>${data.band_order.map(b => `<th>${b}m</th>`).join("")}`;
-                thead.appendChild(headerRow);
+                const headerZone = document.createElement("div");
+                headerZone.className = "cell header-cell";
+                headerZone.textContent = "Zone";
+                header.appendChild(headerZone);
+
+                data.band_order.forEach(band => {
+                    const bandCell = document.createElement("div");
+                    bandCell.className = "cell header-cell";
+                    bandCell.textContent = `${band}m`;
+                    header.appendChild(bandCell);
+                });
 
                 data.zones.forEach(zone => {
-                    const row = document.createElement("tr");
-                    const zoneCell = document.createElement("td");
+                    const zoneCell = document.createElement("div");
                     zoneCell.textContent = zone.label;
-                    zoneCell.className = "zone-cell";
+                    zoneCell.className = "cell zone-cell";
                     zoneCell.dataset.zoneName = zone.name || "Unknown Zone";
-                    row.appendChild(zoneCell);
+                    body.appendChild(zoneCell);
 
                     data.band_order.forEach(band => {
                         const cellData = zone.bands[band];
-                        const td = document.createElement("td");
-                        td.className = "cell";
+                        const cell = document.createElement("div");
+                        cell.className = "cell";
                         if (cellData && cellData.count > 0) {
-                            td.style.background = snrToColor(cellData.median, cellData.count);
-                            td.dataset.zone = zone.zone;
-                            td.dataset.band = band;
-                            td.classList.add("cell-tooltip");
+                            cell.style.background = snrToColor(cellData.median, cellData.count);
+                            cell.dataset.zone = zone.zone;
+                            cell.dataset.band = band;
+                            cell.classList.add("cell-tooltip");
                             const spark = renderSparkline(cellData.sparkline, cellData.slope);
-                            td.innerHTML = `
+                            cell.innerHTML = `
                                 <div class="cell-content">
                                     ${spark}
                                     <span>${formatSNR(cellData.median, cellData.q1, cellData.q3)}</span>
@@ -869,9 +882,8 @@ def generate_html_template(data_url, asset_urls):
                                 </div>
                             `;
                         }
-                        row.appendChild(td);
+                        body.appendChild(cell);
                     });
-                    tbody.appendChild(row);
                 });
             };
 
@@ -913,11 +925,12 @@ def generate_html_template(data_url, asset_urls):
 
             const adjustRowHeight = (rowCount) => {
                 const panel = document.querySelector(".panel");
-                const tableWrap = document.querySelector(".table-wrap");
-                const thead = document.querySelector("#snr-table thead");
+                const gridWrap = document.querySelector(".grid-wrap");
+                const header = document.querySelector(".grid.header");
+                const body = document.querySelector(".grid.body");
                 const legend = document.querySelector(".legend");
                 const footer = document.querySelector(".footer");
-                if (!panel || !tableWrap || !thead || !rowCount) return;
+                if (!panel || !gridWrap || !header || !body || !rowCount) return;
                 const padY = rowCount >= 40 ? 1 : 2;
                 const padX = rowCount >= 40 ? 2 : 3;
                 const panelStyle = getComputedStyle(panel);
@@ -927,9 +940,10 @@ def generate_html_template(data_url, asset_urls):
                 const footerHeight = footer ? footer.offsetHeight : 0;
                 const available =
                     panel.clientHeight - legendHeight - footerHeight - panelPadding - 4;
-                tableWrap.style.height = `${Math.max(0, available)}px`;
-                const bodyAvailable =
-                    available - thead.offsetHeight - 2 - padY * 2 * rowCount;
+                gridWrap.style.height = `${Math.max(0, available)}px`;
+                const headerHeight = header.offsetHeight || 20;
+                const bodyAvailable = available - headerHeight - 2;
+                body.style.height = `${Math.max(0, available - headerHeight)}px`;
                 const minRow = 8;
                 const maxRow = 24;
                 const height = Math.max(
@@ -943,9 +957,11 @@ def generate_html_template(data_url, asset_urls):
                 const sparkW = Math.max(20, Math.round(28 * scale));
                 const sparkH = Math.max(9, Math.round(12 * scale));
                 const lineHeight = Math.max(1, 1.1 * scale);
+                const headerRowHeight = Math.max(16, Math.min(26, Math.round(height + 6)));
                 document.documentElement.style.setProperty("--cell-pad-y", `${padY}px`);
                 document.documentElement.style.setProperty("--cell-pad-x", `${padX}px`);
                 document.documentElement.style.setProperty("--row-height", `${height}px`);
+                document.documentElement.style.setProperty("--header-height", `${headerRowHeight}px`);
                 document.documentElement.style.setProperty("--cell-font-size", `${fontSize.toFixed(2)}rem`);
                 document.documentElement.style.setProperty("--cell-line-height", `${lineHeight.toFixed(2)}`);
                 document.documentElement.style.setProperty("--count-font-size", `${countSize.toFixed(2)}rem`);
