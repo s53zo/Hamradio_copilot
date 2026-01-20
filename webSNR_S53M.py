@@ -672,6 +672,7 @@ def generate_html_template(data_url, asset_urls):
             <div class="hero">
                 <h1>S53M SNR Report</h1>
                 <div class="meta" id="meta">Loading…</div>
+                <div class="meta" id="build">UI 2026.01.20.1</div>
             </div>
             <div class="panel">
                 <div class="grid-wrap">
