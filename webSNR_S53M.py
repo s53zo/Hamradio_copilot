@@ -484,7 +484,7 @@ def generate_html_template(data_url, asset_urls):
             .page {
                 max-width: 1200px;
                 margin: 0 auto;
-                padding: 12px 14px 18px;
+                padding: 6px 10px 10px;
                 height: 100vh;
                 display: flex;
                 flex-direction: column;
@@ -493,28 +493,30 @@ def generate_html_template(data_url, asset_urls):
             .hero {
                 display: flex;
                 flex-wrap: wrap;
-                gap: 6px 14px;
+                gap: 4px 10px;
                 align-items: baseline;
-                margin-bottom: 8px;
+                margin-bottom: 4px;
             }
 
             .hero h1 {
                 font-family: "Fraunces", serif;
-                font-size: clamp(1.3rem, 2vw, 1.9rem);
+                font-size: clamp(1rem, 1.6vw, 1.4rem);
                 letter-spacing: 0.01em;
                 margin: 0;
+                line-height: 1.1;
             }
 
             .hero .meta {
-                font-size: 0.75rem;
+                font-size: 0.68rem;
                 color: var(--muted);
+                line-height: 1.1;
             }
 
             .panel {
                 background: var(--card);
                 border: 1px solid rgba(31, 27, 22, 0.08);
                 border-radius: 14px;
-                padding: 10px;
+                padding: 6px;
                 box-shadow: var(--shadow);
                 backdrop-filter: blur(6px);
                 display: flex;
@@ -537,12 +539,13 @@ def generate_html_template(data_url, asset_urls):
                 width: 100%;
                 min-width: 640px;
                 table-layout: fixed;
-                font-size: 0.78rem;
+                font-size: 0.72rem;
+                line-height: 1.1;
             }
 
             th, td {
                 border: 1px solid var(--grid);
-                padding: 2px 4px;
+                padding: 1px 3px;
                 text-align: center;
                 white-space: nowrap;
             }
@@ -586,27 +589,27 @@ def generate_html_template(data_url, asset_urls):
             }
 
             .cell-content svg {
-                width: 32px;
-                height: 14px;
+                width: 28px;
+                height: 12px;
             }
 
             .count-text {
-                font-size: 0.6rem;
+                font-size: 0.55rem;
                 color: rgba(31, 27, 22, 0.6);
             }
 
             .iqr-text {
-                font-size: 0.6rem;
+                font-size: 0.55rem;
                 color: rgba(31, 27, 22, 0.55);
             }
 
             .legend {
                 display: flex;
                 flex-wrap: wrap;
-                gap: 8px 14px;
-                font-size: 0.7rem;
+                gap: 6px 10px;
+                font-size: 0.65rem;
                 color: var(--muted);
-                margin-top: 8px;
+                margin-top: 4px;
                 align-items: center;
             }
 
@@ -636,9 +639,9 @@ def generate_html_template(data_url, asset_urls):
             }
 
             .footer {
-                margin-top: 8px;
+                margin-top: 4px;
                 text-align: center;
-                font-size: 0.7rem;
+                font-size: 0.65rem;
                 color: var(--muted);
             }
         </style>
@@ -718,8 +721,8 @@ def generate_html_template(data_url, asset_urls):
 
             const renderSparkline = (values, slope) => {
                 if (!values || values.length < 2) return "";
-                const width = 32;
-                const height = 14;
+                const width = 28;
+                const height = 12;
                 const strokeWidth = 1;
                 const minVal = Math.min(...values);
                 const maxVal = Math.max(...values);
