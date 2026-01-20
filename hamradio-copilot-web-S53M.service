@@ -3,10 +3,27 @@ Description=Hamradio Data Analysis Service
 After=network.target
 
 [Service]
-User=root
+User=hamradio
+Group=hamradio
 WorkingDirectory=/opt/hamradio-copilot
 ExecStart=python3 /opt/hamradio-copilot/webSNR_S53M.py -o /opt/hamradio-copilot/html/
 Restart=always
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+PrivateDevices=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+SystemCallArchitectures=native
+ReadWritePaths=/opt/hamradio-copilot
+UMask=027
 
 [Install]
 WantedBy=multi-user.target

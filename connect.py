@@ -31,7 +31,10 @@ def setup_database():
     Includes the 'spotted_station' field.
     """
     logging.debug("Setting up the database.")
-    conn = sqlite3.connect(db_file)
+    conn = sqlite3.connect(db_file, timeout=5)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute("PRAGMA busy_timeout=5000")
     cursor = conn.cursor()
 
     # Create table to store callsign information if it doesn't already exist

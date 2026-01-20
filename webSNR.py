@@ -19,6 +19,12 @@ pd.set_option('display.max_columns', None)
 pd.set_option('display.max_rows', None)
 pd.set_option('display.width', 2000)
 
+ASSET_SOURCES = {
+    "popper.min.js": "https://unpkg.com/@popperjs/core@2.11.8/dist/umd/popper.min.js",
+    "tippy-bundle.umd.min.js": "https://unpkg.com/tippy.js@6.3.7/dist/tippy-bundle.umd.min.js",
+    "tippy-scale.css": "https://unpkg.com/tippy.js@6.3.7/animations/scale.css",
+}
+
 parser = argparse.ArgumentParser(description='Analyze SNR and generate HTML report.')
 parser.add_argument("-f", "--frequency", help="Specify how often data is collected (in minutes). Default = 1",
                     type=float, default=1)
@@ -476,7 +482,7 @@ def generate_empty_cell_style(total_zones=40):
             """)
     return "\n".join(empty_cell_styles)
 
-def generate_html_template(snr_table_html, tooltip_content_html, caption_string):
+def generate_html_template(snr_table_html, tooltip_content_html, caption_string, asset_urls):
     """
     Generates HTML template with improved tooltip styles.
     """
@@ -635,7 +641,7 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
                 text-align: center;
             }}
         </style>
-        <link rel="stylesheet" href="https://unpkg.com/tippy.js@6/animations/scale.css">
+        <link rel="stylesheet" href="{asset_urls['tooltip_css']}">
     </head>
     <body>
         {snr_table_html}
@@ -644,8 +650,8 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
             <small>Make your own SNR overview: <a href="https://github.com/s53zo/Hamradio_copilot">https://github.com/s53zo/Hamradio_copilot</a> <a href="https://azure.s53m.com/copilot/index.html">ALL RX</a> <a href="https://azure.s53m.com/copilot/index_s53m.html">S53M RX only</a></small>
         </div>
 
-        <script src="https://unpkg.com/@popperjs/core@2/dist/umd/popper.min.js"></script>
-        <script src="https://unpkg.com/tippy.js@6/dist/tippy-bundle.umd.min.js"></script>
+        <script src="{asset_urls['tooltip_js']}"></script>
+        <script src="{asset_urls['tooltip_library']}"></script>
         <script>
             document.addEventListener('DOMContentLoaded', function() {{
                 tippy('.tooltip', {{
@@ -668,20 +674,61 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string)
     """
     return template
 
+def ensure_assets(output_folder):
+    assets_dir = os.path.join(output_folder, "assets")
+    os.makedirs(assets_dir, exist_ok=True)
+    local_paths = {}
+
+    for filename, url in ASSET_SOURCES.items():
+        asset_path = os.path.join(assets_dir, filename)
+        local_paths[filename] = asset_path
+        if not os.path.exists(asset_path) or os.path.getsize(asset_path) == 0:
+            try:
+                response = requests.get(url, timeout=(3, 10))
+                response.raise_for_status()
+                with open(asset_path, "wb") as handle:
+                    handle.write(response.content)
+            except Exception as e:
+                print(f"Warning: failed to fetch asset {url}: {e}")
+
+    use_local = all(
+        os.path.exists(path) and os.path.getsize(path) > 0
+        for path in local_paths.values()
+    )
+
+    if use_local:
+        return {
+            "tooltip_js": "assets/popper.min.js",
+            "tooltip_library": "assets/tippy-bundle.umd.min.js",
+            "tooltip_css": "assets/tippy-scale.css",
+        }
+
+    return {
+        "tooltip_js": ASSET_SOURCES["popper.min.js"],
+        "tooltip_library": ASSET_SOURCES["tippy-bundle.umd.min.js"],
+        "tooltip_css": ASSET_SOURCES["tippy-scale.css"],
+    }
+
 def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False):
     # Connect to the SQLite database
-    conn = sqlite3.connect('callsigns.db')
+    conn = sqlite3.connect('callsigns.db', timeout=5)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute("PRAGMA busy_timeout=5000")
   
+    min_ts = datetime.now(dt.timezone.utc).timestamp() - (span * 3600)
     # Read data from the SQLite table `callsigns` into a pandas DataFrame
     query = """
     SELECT zone, band, CAST(snr AS FLOAT) as snr, timestamp, spotter, spotted_station
     FROM callsigns
+    WHERE timestamp >= ?
     """
     
     try:
         df = pd.read_sql_query(
             query,
             conn,
+            params=(min_ts,),
             dtype={
                 'zone': 'Int64',
                 'band': 'str',
@@ -703,10 +750,8 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
         print("Initial DataFrame:")
         print(df.head())
 
-    df = delete_old(df, span)
-
     if debug:
-        print(f"DataFrame after deleting entries older than {span} hours:")
+        print(f"DataFrame after filtering for last {span} hours:")
         print(df.head())
 
     # Set 'zone' as a categorical variable with categories from 1 to 40
@@ -887,7 +932,8 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
         '''
 
     # Generate final HTML
-    final_html = generate_html_template(html_table, tooltip_content_html, caption_string)
+    asset_urls = ensure_assets(output_folder)
+    final_html = generate_html_template(html_table, tooltip_content_html, caption_string, asset_urls)
 
     # Minify the HTML
     minified_html = htmlmin.minify(final_html, remove_empty_space=True, remove_comments=True)

@@ -19,6 +19,12 @@ pd.set_option('display.max_columns', None)
 pd.set_option('display.max_rows', None)
 pd.set_option('display.width', 2000)
 
+ASSET_SOURCES = {
+    "popper.min.js": "https://unpkg.com/@popperjs/core@2.11.8/dist/umd/popper.min.js",
+    "tippy-bundle.umd.min.js": "https://unpkg.com/tippy.js@6.3.7/dist/tippy-bundle.umd.min.js",
+    "tippy-scale.css": "https://unpkg.com/tippy.js@6.3.7/animations/scale.css",
+}
+
 parser = argparse.ArgumentParser(description='Analyze SNR and generate HTML report.')
 parser.add_argument("-f", "--frequency", help="Specify how often data is collected (in minutes). Default = 1",
                     type=float, default=1)
@@ -422,20 +428,61 @@ def generate_html_template(table_html, tooltip_content_html, caption_string):
     </style>
     """
   
+def ensure_assets(output_folder):
+    assets_dir = os.path.join(output_folder, "assets")
+    os.makedirs(assets_dir, exist_ok=True)
+    local_paths = {}
+
+    for filename, url in ASSET_SOURCES.items():
+        asset_path = os.path.join(assets_dir, filename)
+        local_paths[filename] = asset_path
+        if not os.path.exists(asset_path) or os.path.getsize(asset_path) == 0:
+            try:
+                response = requests.get(url, timeout=(3, 10))
+                response.raise_for_status()
+                with open(asset_path, "wb") as handle:
+                    handle.write(response.content)
+            except Exception as e:
+                print(f"Warning: failed to fetch asset {url}: {e}")
+
+    use_local = all(
+        os.path.exists(path) and os.path.getsize(path) > 0
+        for path in local_paths.values()
+    )
+
+    if use_local:
+        return {
+            "tooltip_js": "assets/popper.min.js",
+            "tooltip_library": "assets/tippy-bundle.umd.min.js",
+            "tooltip_css": "assets/tippy-scale.css",
+        }
+
+    return {
+        "tooltip_js": ASSET_SOURCES["popper.min.js"],
+        "tooltip_library": ASSET_SOURCES["tippy-bundle.umd.min.js"],
+        "tooltip_css": ASSET_SOURCES["tippy-scale.css"],
+    }
+
 def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False):
     # Connect to the SQLite database
-    conn = sqlite3.connect('callsigns.db')
+    conn = sqlite3.connect('callsigns.db', timeout=5)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute("PRAGMA busy_timeout=5000")
     
+    min_ts = datetime.now(dt.timezone.utc).timestamp() - (span * 3600)
     # Read data from the SQLite table `callsigns` into a pandas DataFrame
     query = """
     SELECT zone, band, CAST(snr AS FLOAT) as snr, timestamp, spotter, spotted_station
     FROM callsigns
+    WHERE timestamp >= ?
     """
     
     try:
         df = pd.read_sql_query(
             query,
             conn,
+            params=(min_ts,),
             dtype={
                 'zone': 'Int64',
                 'band': 'str',
@@ -457,10 +504,8 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
         print("Initial DataFrame:")
         print(df.head())
 
-    df = delete_old(df, span)  # Ignore any data older than the specified range from the database.
-
     if debug:
-        print(f"DataFrame after deleting entries older than {span} hours:")
+        print(f"DataFrame after filtering for last {span} hours:")
         print(df.head())
 
     # Set 'zone' as a categorical variable with categories from 1 to 40
@@ -625,15 +670,16 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
         '''
 
     # Include Tooltip.js from CDN
-    tooltip_js_cdn = "https://unpkg.com/@popperjs/core@2/dist/umd/popper.min.js"
-    tooltip_js_library = "https://unpkg.com/tippy.js@6/dist/tippy-bundle.umd.min.js"
-    tooltip_css_cdn = "https://unpkg.com/tippy.js@6/animations/scale.css"
+    asset_urls = ensure_assets(output_folder)
+    tooltip_js_cdn = asset_urls["tooltip_js"]
+    tooltip_js_library = asset_urls["tooltip_library"]
+    tooltip_css_cdn = asset_urls["tooltip_css"]
 
     # Prepare solar data if included
     if include_solar_data:
         # Fetch solar widget XML data.
         try:
-            solar_response = requests.get("https://www.hamqsl.com/solarxml.php")
+            solar_response = requests.get("https://www.hamqsl.com/solarxml.php", timeout=(3, 10))
             xml_data = solar_response.content
             root = ET.fromstring(xml_data)
         except Exception as e:
