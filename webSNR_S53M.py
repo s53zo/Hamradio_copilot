@@ -465,6 +465,14 @@ def generate_html_template(data_url, asset_urls):
                 --card: rgba(255, 255, 255, 0.8);
                 --shadow: 0 16px 40px rgba(24, 18, 12, 0.15);
                 --row-height: 18px;
+                --cell-font-size: 0.72rem;
+                --cell-line-height: 1.1;
+                --cell-pad-y: 1px;
+                --cell-pad-x: 3px;
+                --count-font-size: 0.55rem;
+                --iqr-font-size: 0.55rem;
+                --sparkline-width: 28px;
+                --sparkline-height: 12px;
             }
 
             * {
@@ -541,19 +549,20 @@ def generate_html_template(data_url, asset_urls):
                 width: 100%;
                 min-width: 640px;
                 table-layout: fixed;
-                font-size: 0.72rem;
-                line-height: 1.1;
+                font-size: var(--cell-font-size);
+                line-height: var(--cell-line-height);
             }
 
             th, td {
                 border: 1px solid var(--grid);
-                padding: 1px 3px;
+                padding: var(--cell-pad-y) var(--cell-pad-x);
                 text-align: center;
                 white-space: nowrap;
             }
 
             tbody td {
                 height: var(--row-height);
+                overflow: hidden;
             }
 
             th {
@@ -596,17 +605,17 @@ def generate_html_template(data_url, asset_urls):
             }
 
             .cell-content svg {
-                width: 28px;
-                height: 12px;
+                width: var(--sparkline-width);
+                height: var(--sparkline-height);
             }
 
             .count-text {
-                font-size: 0.55rem;
+                font-size: var(--count-font-size);
                 color: rgba(31, 27, 22, 0.6);
             }
 
             .iqr-text {
-                font-size: 0.55rem;
+                font-size: var(--iqr-font-size);
                 color: rgba(31, 27, 22, 0.55);
             }
 
@@ -866,6 +875,8 @@ def generate_html_template(data_url, asset_urls):
                 const legend = document.querySelector(".legend");
                 const footer = document.querySelector(".footer");
                 if (!panel || !tableWrap || !thead || !rowCount) return;
+                const padY = rowCount >= 40 ? 1 : 2;
+                const padX = rowCount >= 40 ? 2 : 3;
                 const panelStyle = getComputedStyle(panel);
                 const panelPadding =
                     parseFloat(panelStyle.paddingTop) + parseFloat(panelStyle.paddingBottom);
@@ -874,14 +885,30 @@ def generate_html_template(data_url, asset_urls):
                 const available =
                     panel.clientHeight - legendHeight - footerHeight - panelPadding - 4;
                 tableWrap.style.height = `${Math.max(0, available)}px`;
-                const bodyAvailable = available - thead.offsetHeight - 2;
-                const minRow = 10;
+                const bodyAvailable =
+                    available - thead.offsetHeight - 2 - padY * 2 * rowCount;
+                const minRow = 8;
                 const maxRow = 24;
                 const height = Math.max(
                     minRow,
                     Math.min(maxRow, Math.floor(bodyAvailable / rowCount))
                 );
+                const scale = height / 18;
+                const fontSize = Math.max(0.56, 0.72 * scale);
+                const countSize = Math.max(0.5, 0.55 * scale);
+                const iqrSize = Math.max(0.5, 0.55 * scale);
+                const sparkW = Math.max(20, Math.round(28 * scale));
+                const sparkH = Math.max(9, Math.round(12 * scale));
+                const lineHeight = Math.max(1, 1.1 * scale);
+                document.documentElement.style.setProperty("--cell-pad-y", `${padY}px`);
+                document.documentElement.style.setProperty("--cell-pad-x", `${padX}px`);
                 document.documentElement.style.setProperty("--row-height", `${height}px`);
+                document.documentElement.style.setProperty("--cell-font-size", `${fontSize.toFixed(2)}rem`);
+                document.documentElement.style.setProperty("--cell-line-height", `${lineHeight.toFixed(2)}`);
+                document.documentElement.style.setProperty("--count-font-size", `${countSize.toFixed(2)}rem`);
+                document.documentElement.style.setProperty("--iqr-font-size", `${iqrSize.toFixed(2)}rem`);
+                document.documentElement.style.setProperty("--sparkline-width", `${sparkW}px`);
+                document.documentElement.style.setProperty("--sparkline-height", `${sparkH}px`);
             };
 
             fetch(DATA_URL, { cache: "no-store" })
