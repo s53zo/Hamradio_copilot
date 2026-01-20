@@ -507,6 +507,7 @@ def generate_html_template(data_url, asset_urls):
                 --grid: #e5dccd;
                 --card: rgba(255, 255, 255, 0.8);
                 --shadow: 0 16px 40px rgba(24, 18, 12, 0.15);
+                --row-height: 18px;
             }
 
             * {
@@ -593,6 +594,10 @@ def generate_html_template(data_url, asset_urls):
                 white-space: nowrap;
             }
 
+            tbody td {
+                height: var(--row-height);
+            }
+
             th {
                 position: sticky;
                 top: 0;
@@ -629,6 +634,7 @@ def generate_html_template(data_url, asset_urls):
                 align-items: center;
                 justify-content: center;
                 gap: 4px;
+                height: 100%;
             }
 
             .cell-content svg {
@@ -894,6 +900,17 @@ def generate_html_template(data_url, asset_urls):
                 });
             };
 
+            const adjustRowHeight = (rowCount) => {
+                const tableWrap = document.querySelector(".table-wrap");
+                const thead = document.querySelector("#snr-table thead");
+                if (!tableWrap || !thead || !rowCount) return;
+                const available = tableWrap.clientHeight - thead.offsetHeight - 2;
+                const minRow = 12;
+                const maxRow = 24;
+                const height = Math.max(minRow, Math.min(maxRow, Math.floor(available / rowCount)));
+                document.documentElement.style.setProperty("--row-height", `${height}px`);
+            };
+
             fetch(DATA_URL, { cache: "no-store" })
                 .then(response => response.json())
                 .then(data => {
@@ -902,6 +919,8 @@ def generate_html_template(data_url, asset_urls):
                     renderLegend();
                     buildTable(data);
                     applyTooltips(data);
+                    requestAnimationFrame(() => adjustRowHeight(data.zones.length));
+                    window.addEventListener("resize", () => adjustRowHeight(data.zones.length));
                 })
                 .catch(err => {
                     const meta = document.getElementById("meta");
