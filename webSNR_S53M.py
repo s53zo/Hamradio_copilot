@@ -484,36 +484,43 @@ def generate_html_template(data_url, asset_urls):
             .page {
                 max-width: 1200px;
                 margin: 0 auto;
-                padding: 28px 20px 64px;
+                padding: 12px 14px 18px;
+                height: 100vh;
+                display: flex;
+                flex-direction: column;
             }
 
             .hero {
                 display: flex;
                 flex-wrap: wrap;
-                gap: 12px 20px;
+                gap: 6px 14px;
                 align-items: baseline;
-                margin-bottom: 18px;
+                margin-bottom: 8px;
             }
 
             .hero h1 {
                 font-family: "Fraunces", serif;
-                font-size: clamp(1.6rem, 2.2vw, 2.4rem);
-                letter-spacing: 0.02em;
+                font-size: clamp(1.3rem, 2vw, 1.9rem);
+                letter-spacing: 0.01em;
                 margin: 0;
             }
 
             .hero .meta {
-                font-size: 0.85rem;
+                font-size: 0.75rem;
                 color: var(--muted);
             }
 
             .panel {
                 background: var(--card);
                 border: 1px solid rgba(31, 27, 22, 0.08);
-                border-radius: 16px;
-                padding: 16px;
+                border-radius: 14px;
+                padding: 10px;
                 box-shadow: var(--shadow);
                 backdrop-filter: blur(6px);
+                display: flex;
+                flex-direction: column;
+                flex: 1;
+                min-height: 0;
             }
 
             .table-wrap {
@@ -521,6 +528,8 @@ def generate_html_template(data_url, asset_urls):
                 border-radius: 12px;
                 border: 1px solid var(--grid);
                 background: white;
+                flex: 1;
+                min-height: 0;
             }
 
             table {
@@ -528,12 +537,12 @@ def generate_html_template(data_url, asset_urls):
                 width: 100%;
                 min-width: 640px;
                 table-layout: fixed;
-                font-size: 0.85rem;
+                font-size: 0.78rem;
             }
 
             th, td {
                 border: 1px solid var(--grid);
-                padding: 6px 6px;
+                padding: 2px 4px;
                 text-align: center;
                 white-space: nowrap;
             }
@@ -576,23 +585,28 @@ def generate_html_template(data_url, asset_urls):
                 gap: 4px;
             }
 
+            .cell-content svg {
+                width: 32px;
+                height: 14px;
+            }
+
             .count-text {
-                font-size: 0.7rem;
+                font-size: 0.6rem;
                 color: rgba(31, 27, 22, 0.6);
             }
 
             .iqr-text {
-                font-size: 0.7rem;
+                font-size: 0.6rem;
                 color: rgba(31, 27, 22, 0.55);
             }
 
             .legend {
                 display: flex;
                 flex-wrap: wrap;
-                gap: 12px 20px;
-                font-size: 0.75rem;
+                gap: 8px 14px;
+                font-size: 0.7rem;
                 color: var(--muted);
-                margin-top: 14px;
+                margin-top: 8px;
                 align-items: center;
             }
 
@@ -622,9 +636,9 @@ def generate_html_template(data_url, asset_urls):
             }
 
             .footer {
-                margin-top: 18px;
+                margin-top: 8px;
                 text-align: center;
-                font-size: 0.75rem;
+                font-size: 0.7rem;
                 color: var(--muted);
             }
         </style>
@@ -704,8 +718,8 @@ def generate_html_template(data_url, asset_urls):
 
             const renderSparkline = (values, slope) => {
                 if (!values || values.length < 2) return "";
-                const width = 38;
-                const height = 16;
+                const width = 32;
+                const height = 14;
                 const strokeWidth = 1;
                 const minVal = Math.min(...values);
                 const maxVal = Math.max(...values);
