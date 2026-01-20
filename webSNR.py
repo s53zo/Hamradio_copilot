@@ -12,6 +12,7 @@ import htmlmin
 import sqlite3
 import numpy as np
 import html
+import json
 from matplotlib.colors import LinearSegmentedColormap
 from scipy.stats import linregress
 
@@ -482,116 +483,168 @@ def generate_empty_cell_style(total_zones=40):
             """)
     return "\n".join(empty_cell_styles)
 
-def generate_html_template(snr_table_html, tooltip_content_html, caption_string, asset_urls):
+def generate_html_template(data_url, asset_urls):
     """
-    Generates HTML template with improved tooltip styles.
+    Generates HTML shell that renders the UI client-side from JSON data.
     """
     template = f"""
     <!DOCTYPE html>
-    <html>
+    <html lang="en">
     <head>
         <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <meta http-equiv="refresh" content="60">
-        <title>SNR Report</title>
+        <title>Hamradio SNR Overview</title>
+        <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+        <link rel="stylesheet" href="{asset_urls['tooltip_css']}">
         <style>
+            :root {{
+                --bg: #f5f0e8;
+                --bg-deep: #efe7da;
+                --ink: #1f1b16;
+                --muted: #6e6358;
+                --accent: #0a8f95;
+                --grid: #e5dccd;
+                --card: rgba(255, 255, 255, 0.8);
+                --shadow: 0 16px 40px rgba(24, 18, 12, 0.15);
+            }}
+
+            * {{
+                box-sizing: border-box;
+            }}
+
             body {{
                 margin: 0;
-                padding: 4px;
-                font-family: 'Roboto', monospace;
-                font-size: 0.85rem;
-                background: #ffffff;
+                font-family: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+                background:
+                    radial-gradient(circle at 20% 15%, rgba(10, 143, 149, 0.14), transparent 50%),
+                    radial-gradient(circle at 80% 10%, rgba(175, 126, 59, 0.18), transparent 55%),
+                    linear-gradient(180deg, var(--bg) 0%, var(--bg-deep) 100%);
+                color: var(--ink);
+                min-height: 100vh;
             }}
-    
-            table {{
-                border-collapse: collapse;
-                width: 100%;
-                max-width: 1200px;
+
+            .page {{
+                max-width: 1280px;
                 margin: 0 auto;
-                table-layout: fixed;
+                padding: 28px 20px 64px;
             }}
-    
-            th {{
-                position: sticky;
-                top: 0;
-                background-color: rgba(255, 255, 255, 0.95);
-                z-index: 10;
-                padding: 2px;
+
+            .hero {{
+                display: flex;
+                flex-wrap: wrap;
+                gap: 12px 20px;
+                align-items: baseline;
+                margin-bottom: 18px;
+            }}
+
+            .hero h1 {{
+                font-family: "Fraunces", serif;
+                font-size: clamp(1.8rem, 2.4vw, 2.7rem);
+                letter-spacing: 0.02em;
+                margin: 0;
+            }}
+
+            .hero .meta {{
                 font-size: 0.85rem;
-                border: 1px solid #ddd;
-                font-weight: bold;
-            }}
-    
-            td {{
-                padding: 1px 1px;
-                border: 1px solid #ddd;
-                text-align: center;
-                white-space: nowrap;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                /* Ensure SVG and text align */
-                vertical-align: middle; 
-            }}
-    
-            tr:nth-child(even) {{
-                background-color: rgba(0, 0, 0, 0.02);
-            }}
-    
-            td:first-child {{
-                width: 25px;
-                font-weight: bold;
-                cursor: help;
-                padding: 0;
+                color: var(--muted);
             }}
 
-            .zone-tooltip {{
-                padding: 1px 2px;
-                background-color: rgba(0, 0, 0, 0.02);
-                transition: background-color 0.2s;
+            .panel {{
+                background: var(--card);
+                border: 1px solid rgba(31, 27, 22, 0.08);
+                border-radius: 16px;
+                padding: 16px;
+                box-shadow: var(--shadow);
+                backdrop-filter: blur(6px);
             }}
 
-            .zone-tooltip:hover {{
-                background-color: rgba(0, 0, 0, 0.05);
-            }}
-               
-            .tippy-box[data-theme~='zone'] {{
-                background-color: #333;
-                color: white;
-                font-size: 0.8rem;
-                line-height: 1.3;
-                max-width: none !important;
-                width: auto !important;
-            }}
-
-            .tippy-box[data-theme~='zone'] .tippy-content {{
-                padding: 8px 12px;
-            }}
-    
-            .tippy-box[data-theme~='zone'] .tippy-arrow {{
-                color: #333;
-            }}
-    
-            .tippy-content {{
-                padding: 0 !important;
-                font-size: 0.8rem;
-                max-width: none !important;
-                width: auto !important;
+            .table-wrap {{
+                overflow-x: auto;
+                border-radius: 12px;
+                border: 1px solid var(--grid);
                 background: white;
             }}
 
-            .tooltip {{
-                cursor: pointer;
-                /* Allow tooltip span to contain block/inline-block elements */
-                display: inline-block; 
+            table {{
+                border-collapse: collapse;
                 width: 100%;
+                min-width: 720px;
+                table-layout: fixed;
+                font-size: 0.85rem;
+            }}
+
+            th, td {{
+                border: 1px solid var(--grid);
+                padding: 6px 6px;
+                text-align: center;
+                white-space: nowrap;
+            }}
+
+            th {{
+                position: sticky;
+                top: 0;
+                background: rgba(255, 255, 255, 0.96);
+                z-index: 5;
+                font-weight: 600;
+            }}
+
+            tbody tr:nth-child(even) {{
+                background: rgba(15, 12, 9, 0.02);
+            }}
+
+            .zone-cell {{
+                font-weight: 600;
+                color: var(--ink);
+                cursor: help;
+            }}
+
+            .cell {{
+                position: relative;
+                cursor: pointer;
+            }}
+
+            .cell-content {{
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 4px;
+            }}
+
+            .count-text {{
+                font-size: 0.7rem;
+                color: rgba(31, 27, 22, 0.6);
+            }}
+
+            .iqr-text {{
+                font-size: 0.7rem;
+                color: rgba(31, 27, 22, 0.55);
+            }}
+
+            .legend {{
+                display: flex;
+                flex-wrap: wrap;
+                gap: 12px 20px;
+                font-size: 0.75rem;
+                color: var(--muted);
+                margin-top: 14px;
+                align-items: center;
+            }}
+
+            .legend .swatch {{
+                width: 14px;
+                height: 14px;
+                border-radius: 3px;
+                border: 1px solid rgba(0, 0, 0, 0.1);
             }}
 
             .station-list {{
                 display: inline-grid;
                 grid-template-columns: repeat(4, minmax(70px, max-content));
-                gap: 2px;
-                padding: 4px;
-                background: #e4f0f3;
-                color: #333333;
+                gap: 4px;
+                padding: 8px;
+                background: #f0f6f7;
+                color: #222;
                 width: fit-content;
                 max-width: 100%;
             }}
@@ -602,72 +655,234 @@ def generate_html_template(snr_table_html, tooltip_content_html, caption_string,
                 overflow: hidden;
                 text-overflow: ellipsis;
             }}
-    
-            .tooltip_templates {{
-                display: none;
-            }}
-    
-            caption {{
-                padding: 2px;
-                font-size: 0.85rem;
-                font-weight: bold;
-            }}
 
-            .count-text {{
-                font-size: 0.6rem;
-                color: #666;
-            }}
-
-            .iqr-text {{
-                font-size: 0.65rem; /* Slightly smaller for IQR */
-                color: #888; /* Lighter color for IQR */
-            }}
-
-            td svg {{ /* Style for sparkline SVG */
-                vertical-align: middle;
-                margin-right: 3px; /* Space between sparkline and text */
-            }}
-
-            .legend {{
-                position: fixed;
-                bottom: 20px;
-                left: 20px;
-                right: 20px;
-                background: rgba(255, 255, 255, 0.95);
-                padding: 15px;
-                border-radius: 8px;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-                z-index: 1000;
+            .footer {{
+                margin-top: 18px;
                 text-align: center;
+                font-size: 0.75rem;
+                color: var(--muted);
             }}
         </style>
-        <link rel="stylesheet" href="{asset_urls['tooltip_css']}">
     </head>
     <body>
-        {snr_table_html}
-        {tooltip_content_html}
-        <div style="text-align: center; margin-top: 20px;">
-            <small>Make your own SNR overview: <a href="https://github.com/s53zo/Hamradio_copilot">https://github.com/s53zo/Hamradio_copilot</a> <a href="https://azure.s53m.com/copilot/index.html">ALL RX</a> <a href="https://azure.s53m.com/copilot/index_s53m.html">S53M RX only</a></small>
+        <div class="page">
+            <div class="hero">
+                <h1>Hamradio SNR Overview</h1>
+                <div class="meta" id="meta">Loading…</div>
+            </div>
+            <div class="panel">
+                <div class="table-wrap">
+                    <table id="snr-table">
+                        <thead></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <div class="legend" id="legend"></div>
+                <div class="footer">
+                    Make your own SNR overview: <a href="https://github.com/s53zo/Hamradio_copilot">github.com/s53zo/Hamradio_copilot</a>
+                </div>
+            </div>
         </div>
 
         <script src="{asset_urls['tooltip_js']}"></script>
         <script src="{asset_urls['tooltip_library']}"></script>
         <script>
-            document.addEventListener('DOMContentLoaded', function() {{
-                tippy('.tooltip', {{
+            const DATA_URL = "{data_url}";
+
+            const escapeHtml = (value) => {{
+                const div = document.createElement("div");
+                div.textContent = value;
+                return div.innerHTML;
+            }};
+
+            const getIntensity = (count, maxCount = 1000) => {{
+                const minIntensity = 0.2;
+                const maxAdditional = 0.8;
+                const a = 10.0 / maxCount;
+                return minIntensity + maxAdditional * (1 - Math.exp(-a * count));
+            }};
+
+            const hslToRgb = (h, s, l) => {{
+                if (s === 0) return [l, l, l];
+                const hueToRgb = (p, q, t) => {{
+                    if (t < 0) t += 1;
+                    if (t > 1) t -= 1;
+                    if (t < 1/6) return p + (q - p) * 6 * t;
+                    if (t < 1/2) return q;
+                    if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+                    return p;
+                }};
+                const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+                const p = 2 * l - q;
+                return [
+                    hueToRgb(p, q, h + 1/3),
+                    hueToRgb(p, q, h),
+                    hueToRgb(p, q, h - 1/3),
+                ];
+            }};
+
+            const snrToColor = (snr, count) => {{
+                if (snr === null || count === 0) return "#ffffff";
+                let hue = 120;
+                if (snr < -15) hue = 220;
+                else if (snr < -10) hue = 200;
+                else if (snr < 0) hue = 90;
+
+                const intensity = getIntensity(count);
+                const sat = 0.8;
+                const minLightness = 0.32;
+                const maxLightness = 0.7;
+                const lightness = minLightness + intensity * (maxLightness - minLightness);
+                const [r, g, b] = hslToRgb(hue / 360, sat, lightness);
+                return `rgb(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)})`;
+            }};
+
+            const renderSparkline = (values, slope) => {{
+                if (!values || values.length < 2) return "";
+                const width = 38;
+                const height = 16;
+                const strokeWidth = 1;
+                const minVal = Math.min(...values);
+                const maxVal = Math.max(...values);
+                const range = maxVal - minVal || 1;
+                const points = values.map((v, i) => {{
+                    const x = (i / (values.length - 1)) * (width - strokeWidth * 2) + strokeWidth;
+                    const y = ((v - minVal) / range) * (height - strokeWidth * 2) + strokeWidth;
+                    return [x, height - y];
+                }});
+                const mainPoints = points.slice(0, -1).map(p => p.join(",")).join(" ");
+                const lastPoints = points.slice(-2).map(p => p.join(",")).join(" ");
+                let trendColor = "#1f1b16";
+                if (slope !== null) {{
+                    if (slope > 0.1) trendColor = "#1f9d55";
+                    else if (slope < -0.1) trendColor = "#c2410c";
+                }}
+                return `
+                    <svg width="${{width}}" height="${{height}}" aria-hidden="true">
+                        <polyline points="${{mainPoints}}" fill="none" stroke="#1f1b16" stroke-width="${{strokeWidth}}"/>
+                        <polyline points="${{lastPoints}}" fill="none" stroke="${{trendColor}}" stroke-width="${{strokeWidth}}"/>
+                    </svg>
+                `;
+            }};
+
+            const formatSNR = (median, q1, q3) => {{
+                if (median === null) return "N/A";
+                const rounded = Math.round(median);
+                if (q1 === null || q3 === null) return `${{rounded}}`;
+                return `${{rounded}} <span class="iqr-text">${{Math.round(q1)}}⁄${{Math.round(q3)}}</span>`;
+            }};
+
+            const renderLegend = () => {{
+                const legend = document.getElementById("legend");
+                const items = [
+                    {{ label: "Strong (>= 0 dB)", snr: 0 }},
+                    {{ label: "Moderate (-10 to 0 dB)", snr: -5 }},
+                    {{ label: "Weak (-15 to -10 dB)", snr: -12 }},
+                    {{ label: "Very weak (< -15 dB)", snr: -20 }},
+                ];
+                legend.innerHTML = items.map(item => {{
+                    const color = snrToColor(item.snr, 25);
+                    return `
+                        <span style="display:flex;align-items:center;gap:6px;">
+                            <span class="swatch" style="background:${{color}};"></span>
+                            ${{item.label}}
+                        </span>
+                    `;
+                }}).join("");
+            }};
+
+            const buildTable = (data) => {{
+                const thead = document.querySelector("#snr-table thead");
+                const tbody = document.querySelector("#snr-table tbody");
+                thead.innerHTML = "";
+                tbody.innerHTML = "";
+
+                const headerRow = document.createElement("tr");
+                headerRow.innerHTML = `<th>Zone</th>${{data.band_order.map(b => `<th>${{b}}m</th>`).join("")}}`;
+                thead.appendChild(headerRow);
+
+                data.zones.forEach(zone => {{
+                    const row = document.createElement("tr");
+                    const zoneCell = document.createElement("td");
+                    zoneCell.textContent = zone.label;
+                    zoneCell.className = "zone-cell";
+                    zoneCell.dataset.zoneName = zone.name || "Unknown Zone";
+                    row.appendChild(zoneCell);
+
+                    data.band_order.forEach(band => {{
+                        const cellData = zone.bands[band];
+                        const td = document.createElement("td");
+                        td.className = "cell";
+                        if (cellData && cellData.count > 0) {{
+                            td.style.background = snrToColor(cellData.median, cellData.count);
+                            td.dataset.zone = zone.zone;
+                            td.dataset.band = band;
+                            td.classList.add("cell-tooltip");
+                            const spark = renderSparkline(cellData.sparkline, cellData.slope);
+                            td.innerHTML = `
+                                <div class="cell-content">
+                                    ${spark}
+                                    <span>${formatSNR(cellData.median, cellData.q1, cellData.q3)}</span>
+                                    <span class="count-text">(${{cellData.count}})</span>
+                                </div>
+                            `;
+                        }}
+                        row.appendChild(td);
+                    }});
+                    tbody.appendChild(row);
+                }});
+            }};
+
+            const applyTooltips = (data) => {{
+                const zoneMap = new Map(data.zones.map(z => [String(z.zone), z]));
+
+                tippy(".cell-tooltip", {{
                     content(reference) {{
-                        const id = reference.getAttribute('data-tooltip-content');
-                        const template = document.querySelector(id);
-                        return template.innerHTML;
+                        const zoneId = reference.dataset.zone;
+                        const band = reference.dataset.band;
+                        const zone = zoneMap.get(zoneId);
+                        if (!zone || !zone.bands[band]) return "No data";
+                        const stations = zone.bands[band].stations || [];
+                        if (stations.length === 0) return "No stations";
+                        return `<div class="station-list">${{stations.map(s => `<div>${{escapeHtml(s)}}</div>`).join("")}}</div>`;
                     }},
                     allowHTML: true,
-                    maxWidth: 'none',
+                    maxWidth: "none",
                     interactive: true,
-                    animation: 'scale',
-                    placement: 'top',
-                    theme: 'light',
+                    animation: "scale",
+                    placement: "top",
+                    theme: "light",
+                    appendTo: () => document.body,
                 }});
-            }});
+
+                tippy(".zone-cell", {{
+                    content(reference) {{
+                        return reference.dataset.zoneName || "Unknown Zone";
+                    }},
+                    allowHTML: false,
+                    maxWidth: 350,
+                    interactive: false,
+                    animation: "scale",
+                    placement: "right",
+                    theme: "light",
+                    appendTo: () => document.body,
+                }});
+            }};
+
+            fetch(DATA_URL, {{ cache: "no-store" }})
+                .then(response => response.json())
+                .then(data => {{
+                    const meta = document.getElementById("meta");
+                    meta.textContent = `Last ${{data.span_minutes}} minutes · Updated ${{data.generated_at}}`;
+                    renderLegend();
+                    buildTable(data);
+                    applyTooltips(data);
+                }})
+                .catch(err => {{
+                    const meta = document.getElementById("meta");
+                    meta.textContent = "Failed to load data.";
+                    console.error(err);
+                }});
         </script>
     </body>
     </html>
@@ -783,17 +998,6 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
     q3_table = stats_table.get(('snr', '<lambda_1>'), pd.DataFrame()).reindex(index=all_zones, columns=band_order)
     count_table = stats_table.get(('spotter', 'unique_spots'), pd.DataFrame()).reindex(index=all_zones, columns=band_order).fillna(0).astype(int)
 
-    # --- Prepare data for EMA slope and Sparklines ---
-    # Calculate per-minute averages for the entire dataset (within the time span)
-    df_minute_avg = df.copy()
-    df_minute_avg['minute'] = df_minute_avg['timestamp'].dt.floor('min')
-    per_minute_snr = df_minute_avg.groupby(['zone', 'band', 'minute'], observed=True)['snr'].mean().reset_index()
-        
-    # --- Reformat base table structure ---
-    # Reformat the base structure for the final table (using median table as template for zones/bands layout)
-    # display_table_base will have index 0-39
-    display_table_base = reformat_table(median_table.copy()) # Use copy to avoid modifying original
-
     if debug:
         print("Count Table:")
         print(count_table.head())
@@ -804,136 +1008,70 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
         print("Q3 Table:")
         print(q3_table.head())
 
-    now = dt.datetime.now(dt.timezone.utc).strftime("%b %d, %Y %H:%M")
-    caption_string = f"Last {int(span*60)} minutes SNR (Median [Q1,Q3]) of spots in S5 and around - refresh at {now} GMT"
+    def to_number(value):
+        if pd.isna(value):
+            return None
+        return float(value)
 
-    # Create the final display table structure from the base (index 0-39)
-    combined_table = display_table_base.copy()
-    
-    # Tooltip content list
-    tooltip_contents = []
-    
-    # --- Pre-calculate styles ---
-    # Create styles DataFrame matching combined_table structure (index 0-39, columns including 'zone', 'zone_display')
-    styles_df = pd.DataFrame('', index=combined_table.index, columns=combined_table.columns)
-    # Set default white background for all cells initially
-    for col in styles_df.columns:
-         styles_df[col] = 'background-color: #ffffff; padding: 1px 2px;'
+    def series_to_list(series, limit=24):
+        if series is None or series.empty:
+            return []
+        values = [float(v) for v in series.tail(limit).tolist() if not pd.isna(v)]
+        return [round(v, 2) for v in values]
 
-    # --- Populate combined_table and styles_df ---
-    for band in band_order:
-        if band in median_table.columns: # Check if band exists in the data
-            combined_results = []
-            # Iterate using combined_table's index (0-39)
-            for idx in combined_table.index: 
-                zone = idx + 1 # Zone number is index + 1 (1-40)
-                
-                # Safely get median, q1, q3, count using .loc with the zone number (1-40) on the original stat tables
-                # Use .get() for safer access in case zone doesn't exist (though reindex should prevent this)
-                median_snr = median_table.get(band, pd.Series(dtype=float)).get(zone, np.nan)
-                q1_snr = q1_table.get(band, pd.Series(dtype=float)).get(zone, np.nan)
-                q3_snr = q3_table.get(band, pd.Series(dtype=float)).get(zone, np.nan)
-                count = count_table.get(band, pd.Series(dtype=int)).get(zone, 0)
+    stations_by_zone_band = {}
+    if not df.empty:
+        stations_by_zone_band = (
+            df.groupby(['zone', 'band'], observed=True)['spotted_station']
+            .apply(lambda x: sorted(set(x)))
+            .to_dict()
+        )
 
-                # Get recent per-minute data for EMA slope and sparkline
-                # Filter the pre-calculated per_minute_snr DataFrame using zone (1-40)
-                recent_snr_data = per_minute_snr[
-                    (per_minute_snr['zone'] == zone) & (per_minute_snr['band'] == band)
-                ].set_index('minute')['snr'].sort_index()
+    zones_data = []
+    for zone in range(1, 41):
+        zone_entry = {
+            "zone": zone,
+            "label": f"{zone:02d}",
+            "name": zone_name_map.get(zone, "Unknown Zone"),
+            "bands": {},
+        }
+        for band in band_order:
+            median_snr = median_table.get(band, pd.Series(dtype=float)).get(zone, np.nan)
+            q1_snr = q1_table.get(band, pd.Series(dtype=float)).get(zone, np.nan)
+            q3_snr = q3_table.get(band, pd.Series(dtype=float)).get(zone, np.nan)
+            count = count_table.get(band, pd.Series(dtype=int)).get(zone, 0)
 
-                # Calculate EMA slope and get EMA series
-                # Pass the main df for calculation, as it contains all necessary raw data
-                ema_slope, ema_series = compute_ema_slope(df, zone, band) 
+            ema_slope, ema_series = compute_ema_slope(df, zone, band)
 
-                # Generate sparkline from EMA series, passing slope for trend coloring
-                sparkline_svg = generate_sparkline_svg(ema_series, trend_slope=ema_slope) 
+            zone_entry["bands"][band] = {
+                "median": to_number(median_snr),
+                "q1": to_number(q1_snr),
+                "q3": to_number(q3_snr),
+                "count": int(count) if not pd.isna(count) else 0,
+                "slope": to_number(ema_slope),
+                "sparkline": series_to_list(ema_series),
+                "stations": stations_by_zone_band.get((zone, band), []),
+            }
+        zones_data.append(zone_entry)
 
-                # Combine display elements
-                result = combine_snr_count(
-                    zone, band, median_snr, q1_snr, q3_snr, count, ema_slope, sparkline_svg, df, idx # Pass idx (0-39) for tooltip ID
-                )
-                combined_results.append(result)
+    generated_at = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    data_payload = {
+        "generated_at": generated_at,
+        "span_minutes": int(span * 60),
+        "band_order": band_order,
+        "zones": zones_data,
+    }
 
-                # Calculate and store style string in styles_df using index 'idx' (0-39)
-                if not pd.isna(median_snr) and count > 0:
-                    styles_df.loc[idx, band] = snr_to_color(median_snr, count)
-                # else: style remains default white
-            
-            combined_table[band] = [result[0] for result in combined_results]
-            tooltip_contents.extend([content for _, content in combined_results if content])
-        else:
-            combined_table[band] = ' ' # Ensure column exists even if no data
-            styles_df[band] = 'background-color: #ffffff; padding: 1px 2px;' # Ensure style column exists
+    os.makedirs(output_folder, exist_ok=True)
+    data_filename = "data.json"
+    with open(data_filename, "w", encoding="utf-8") as data_file:
+        json.dump(data_payload, data_file, ensure_ascii=True)
+    with open(os.path.join(output_folder, data_filename), "w", encoding="utf-8") as data_file:
+        json.dump(data_payload, data_file, ensure_ascii=True)
 
-    # Handle 'zone' column separately (already done in display_table_base)
-    combined_table['zone_display'] = display_table_base['zone_display']
-
-    # Ensure the columns are ordered as per band_order
-    combined_table = combined_table[['zone_display'] + band_order]
-    combined_table = combined_table.rename(columns={'zone_display': 'zone'})
-    
-    # Ensure styles_df has the correct columns ('zone' + band_order) matching combined_table
-    styles_df = styles_df.reindex(columns=combined_table.columns, fill_value='background-color: #ffffff; padding: 1px 2px;')
-    # Set default style for the 'zone' column (no background color)
-    styles_df['zone'] = '' 
-
-    # Apply the styles DataFrame directly using axis=None (elementwise)
-    styled_table = combined_table.style.apply(lambda x: styles_df, axis=None).set_caption(caption_string)
-
-    # Apply other non-background properties separately
-    styled_table.set_properties(subset=['zone'], **{'font-weight': 'bold'})
-    styled_table.set_properties(**{'text-align': 'center'})
-
-    # Set table styles
-    styled_table.set_table_styles([
-        {'selector': 'caption', 'props': [
-            ('font-size', '0.85rem'),
-            ('font-weight', 'bold'),
-            ('padding', '2px')
-        ]},
-        {'selector': 'th', 'props': [
-            ('font-size', '0.85rem'),
-            ('padding', '2px'),
-            ('position', 'sticky'),
-            ('top', '0'),
-            ('background-color', 'rgba(255, 255, 255, 0.95)'),
-            ('z-index', '1'),
-            ('font-weight', 'bold'),
-            ('white-space', 'nowrap')
-        ]},
-        {'selector': 'td', 'props': [
-            ('padding', '1px 2px'),
-            ('font-size', '0.85rem'),
-            ('white-space', 'nowrap')
-        ]},
-        {'selector': 'td:first-child', 'props': [
-            ('font-weight', 'bold'),
-            ('width', '25px'),
-            ('min-width', '25px')
-        ]}
-    ])
-
-    # Convert to HTML
-    html_table = styled_table.hide(axis="index").to_html()
-    html_table = html_table.replace(
-        '<table ',
-        '<table style="width: 100%; max-width: 1100px; margin: 0 auto; table-layout: fixed;" '
-    )
-
-    # Build tooltip content HTML
-    tooltip_content_html = ''
-    for tooltip_id, content_html in tooltip_contents:
-        tooltip_content_html += f'''
-        <div class="tooltip_templates">
-            <div id="{tooltip_id}">
-                {content_html}
-            </div>
-        </div>
-        '''
-
-    # Generate final HTML
+    # Generate final HTML shell
     asset_urls = ensure_assets(output_folder)
-    final_html = generate_html_template(html_table, tooltip_content_html, caption_string, asset_urls)
+    final_html = generate_html_template(data_filename, asset_urls)
 
     # Minify the HTML
     minified_html = htmlmin.minify(final_html, remove_empty_space=True, remove_comments=True)
@@ -947,7 +1085,7 @@ def run(access_key=None, secret_key=None, s3_buck=None, include_solar_data=False
     with open(local_file_path, "w", encoding="utf-8") as local_file:
         local_file.write(minified_html)
 
-    print(f"Table updated in index.html and saved to '{output_folder}' at {now}")
+    print(f"Table updated in index.html and saved to '{output_folder}' at {generated_at}")
     
     if use_s3:
         if not (access_key and secret_key and s3_buck):
