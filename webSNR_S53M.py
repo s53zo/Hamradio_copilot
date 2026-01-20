@@ -528,6 +528,7 @@ def generate_html_template(data_url, asset_urls):
 
             .table-wrap {
                 overflow-x: auto;
+                overflow-y: hidden;
                 border-radius: 12px;
                 border: 1px solid var(--grid);
                 background: white;
@@ -676,6 +677,7 @@ def generate_html_template(data_url, asset_urls):
         <script src="__TOOLTIP_LIB__"></script>
         <script>
             const DATA_URL = "__DATA_URL__";
+            let resizeObserver;
 
             const escapeHtml = (value) => {
                 const div = document.createElement("div");
@@ -858,13 +860,27 @@ def generate_html_template(data_url, asset_urls):
             };
 
             const adjustRowHeight = (rowCount) => {
+                const panel = document.querySelector(".panel");
                 const tableWrap = document.querySelector(".table-wrap");
                 const thead = document.querySelector("#snr-table thead");
-                if (!tableWrap || !thead || !rowCount) return;
-                const available = tableWrap.clientHeight - thead.offsetHeight - 2;
-                const minRow = 12;
+                const legend = document.querySelector(".legend");
+                const footer = document.querySelector(".footer");
+                if (!panel || !tableWrap || !thead || !rowCount) return;
+                const panelStyle = getComputedStyle(panel);
+                const panelPadding =
+                    parseFloat(panelStyle.paddingTop) + parseFloat(panelStyle.paddingBottom);
+                const legendHeight = legend ? legend.offsetHeight : 0;
+                const footerHeight = footer ? footer.offsetHeight : 0;
+                const available =
+                    panel.clientHeight - legendHeight - footerHeight - panelPadding - 4;
+                tableWrap.style.height = `${Math.max(0, available)}px`;
+                const bodyAvailable = available - thead.offsetHeight - 2;
+                const minRow = 10;
                 const maxRow = 24;
-                const height = Math.max(minRow, Math.min(maxRow, Math.floor(available / rowCount)));
+                const height = Math.max(
+                    minRow,
+                    Math.min(maxRow, Math.floor(bodyAvailable / rowCount))
+                );
                 document.documentElement.style.setProperty("--row-height", `${height}px`);
             };
 
@@ -876,8 +892,17 @@ def generate_html_template(data_url, asset_urls):
                     renderLegend();
                     buildTable(data);
                     applyTooltips(data);
-                    requestAnimationFrame(() => adjustRowHeight(data.zones.length));
-                    window.addEventListener("resize", () => adjustRowHeight(data.zones.length));
+                    const applySizing = () => adjustRowHeight(data.zones.length);
+                    requestAnimationFrame(applySizing);
+                    setTimeout(applySizing, 200);
+                    if (document.fonts && document.fonts.ready) {
+                        document.fonts.ready.then(applySizing);
+                    }
+                    window.addEventListener("resize", applySizing);
+                    if (!resizeObserver) {
+                        resizeObserver = new ResizeObserver(applySizing);
+                        resizeObserver.observe(document.querySelector(".panel"));
+                    }
                 })
                 .catch(err => {
                     const meta = document.getElementById("meta");
