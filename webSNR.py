@@ -487,7 +487,7 @@ def generate_html_template(data_url, asset_urls):
     """
     Generates HTML shell that renders the UI client-side from JSON data.
     """
-    template = f"""
+    template = """
     <!DOCTYPE html>
     <html lang="en">
     <head>
@@ -496,9 +496,9 @@ def generate_html_template(data_url, asset_urls):
         <meta http-equiv="refresh" content="60">
         <title>Hamradio SNR Overview</title>
         <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-        <link rel="stylesheet" href="{asset_urls['tooltip_css']}">
+        <link rel="stylesheet" href="__TOOLTIP_CSS__">
         <style>
-            :root {{
+            :root {
                 --bg: #f5f0e8;
                 --bg-deep: #efe7da;
                 --ink: #1f1b16;
@@ -507,13 +507,13 @@ def generate_html_template(data_url, asset_urls):
                 --grid: #e5dccd;
                 --card: rgba(255, 255, 255, 0.8);
                 --shadow: 0 16px 40px rgba(24, 18, 12, 0.15);
-            }}
+            }
 
-            * {{
+            * {
                 box-sizing: border-box;
-            }}
+            }
 
-            body {{
+            body {
                 margin: 0;
                 font-family: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
                 background:
@@ -522,106 +522,106 @@ def generate_html_template(data_url, asset_urls):
                     linear-gradient(180deg, var(--bg) 0%, var(--bg-deep) 100%);
                 color: var(--ink);
                 min-height: 100vh;
-            }}
+            }
 
-            .page {{
+            .page {
                 max-width: 1280px;
                 margin: 0 auto;
                 padding: 28px 20px 64px;
-            }}
+            }
 
-            .hero {{
+            .hero {
                 display: flex;
                 flex-wrap: wrap;
                 gap: 12px 20px;
                 align-items: baseline;
                 margin-bottom: 18px;
-            }}
+            }
 
-            .hero h1 {{
+            .hero h1 {
                 font-family: "Fraunces", serif;
                 font-size: clamp(1.8rem, 2.4vw, 2.7rem);
                 letter-spacing: 0.02em;
                 margin: 0;
-            }}
+            }
 
-            .hero .meta {{
+            .hero .meta {
                 font-size: 0.85rem;
                 color: var(--muted);
-            }}
+            }
 
-            .panel {{
+            .panel {
                 background: var(--card);
                 border: 1px solid rgba(31, 27, 22, 0.08);
                 border-radius: 16px;
                 padding: 16px;
                 box-shadow: var(--shadow);
                 backdrop-filter: blur(6px);
-            }}
+            }
 
-            .table-wrap {{
+            .table-wrap {
                 overflow-x: auto;
                 border-radius: 12px;
                 border: 1px solid var(--grid);
                 background: white;
-            }}
+            }
 
-            table {{
+            table {
                 border-collapse: collapse;
                 width: 100%;
                 min-width: 720px;
                 table-layout: fixed;
                 font-size: 0.85rem;
-            }}
+            }
 
-            th, td {{
+            th, td {
                 border: 1px solid var(--grid);
                 padding: 6px 6px;
                 text-align: center;
                 white-space: nowrap;
-            }}
+            }
 
-            th {{
+            th {
                 position: sticky;
                 top: 0;
                 background: rgba(255, 255, 255, 0.96);
                 z-index: 5;
                 font-weight: 600;
-            }}
+            }
 
-            tbody tr:nth-child(even) {{
+            tbody tr:nth-child(even) {
                 background: rgba(15, 12, 9, 0.02);
-            }}
+            }
 
-            .zone-cell {{
+            .zone-cell {
                 font-weight: 600;
                 color: var(--ink);
                 cursor: help;
-            }}
+            }
 
-            .cell {{
+            .cell {
                 position: relative;
                 cursor: pointer;
-            }}
+            }
 
-            .cell-content {{
+            .cell-content {
                 display: flex;
                 align-items: center;
                 justify-content: center;
                 gap: 4px;
-            }}
+            }
 
-            .count-text {{
+            .count-text {
                 font-size: 0.7rem;
                 color: rgba(31, 27, 22, 0.6);
-            }}
+            }
 
-            .iqr-text {{
+            .iqr-text {
                 font-size: 0.7rem;
                 color: rgba(31, 27, 22, 0.55);
-            }}
+            }
 
-            .legend {{
+            .legend {
                 display: flex;
                 flex-wrap: wrap;
                 gap: 12px 20px;
@@ -629,16 +629,16 @@ def generate_html_template(data_url, asset_urls):
                 color: var(--muted);
                 margin-top: 14px;
                 align-items: center;
-            }}
+            }
 
-            .legend .swatch {{
+            .legend .swatch {
                 width: 14px;
                 height: 14px;
                 border-radius: 3px;
                 border: 1px solid rgba(0, 0, 0, 0.1);
-            }}
+            }
 
-            .station-list {{
+            .station-list {
                 display: inline-grid;
                 grid-template-columns: repeat(4, minmax(70px, max-content));
                 gap: 4px;
@@ -647,21 +647,21 @@ def generate_html_template(data_url, asset_urls):
                 color: #222;
                 width: fit-content;
                 max-width: 100%;
-            }}
+            }
 
-            .station-list div {{
+            .station-list div {
                 padding: 2px 4px;
                 white-space: nowrap;
                 overflow: hidden;
                 text-overflow: ellipsis;
-            }}
+            }
 
-            .footer {{
+            .footer {
                 margin-top: 18px;
                 text-align: center;
                 font-size: 0.75rem;
                 color: var(--muted);
-            }}
+            }
         </style>
     </head>
     <body>
@@ -684,34 +684,34 @@ def generate_html_template(data_url, asset_urls):
             </div>
         </div>
 
-        <script src="{asset_urls['tooltip_js']}"></script>
-        <script src="{asset_urls['tooltip_library']}"></script>
+        <script src="__TOOLTIP_JS__"></script>
+        <script src="__TOOLTIP_LIB__"></script>
         <script>
-            const DATA_URL = "{data_url}";
+            const DATA_URL = "__DATA_URL__";
 
-            const escapeHtml = (value) => {{
+            const escapeHtml = (value) => {
                 const div = document.createElement("div");
                 div.textContent = value;
                 return div.innerHTML;
-            }};
+            };
 
-            const getIntensity = (count, maxCount = 1000) => {{
+            const getIntensity = (count, maxCount = 1000) => {
                 const minIntensity = 0.2;
                 const maxAdditional = 0.8;
                 const a = 10.0 / maxCount;
                 return minIntensity + maxAdditional * (1 - Math.exp(-a * count));
-            }};
+            };
 
-            const hslToRgb = (h, s, l) => {{
+            const hslToRgb = (h, s, l) => {
                 if (s === 0) return [l, l, l];
-                const hueToRgb = (p, q, t) => {{
+                const hueToRgb = (p, q, t) => {
                     if (t < 0) t += 1;
                     if (t > 1) t -= 1;
                     if (t < 1/6) return p + (q - p) * 6 * t;
                     if (t < 1/2) return q;
                     if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
                     return p;
-                }};
+                };
                 const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
                 const p = 2 * l - q;
                 return [
@@ -719,9 +719,9 @@ def generate_html_template(data_url, asset_urls):
                     hueToRgb(p, q, h),
                     hueToRgb(p, q, h - 1/3),
                 ];
-            }};
+            };
 
-            const snrToColor = (snr, count) => {{
+            const snrToColor = (snr, count) => {
                 if (snr === null || count === 0) return "#ffffff";
                 let hue = 120;
                 if (snr < -15) hue = 220;
@@ -735,9 +735,9 @@ def generate_html_template(data_url, asset_urls):
                 const lightness = minLightness + intensity * (maxLightness - minLightness);
                 const [r, g, b] = hslToRgb(hue / 360, sat, lightness);
                 return `rgb(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)})`;
-            }};
+            };
 
-            const renderSparkline = (values, slope) => {{
+            const renderSparkline = (values, slope) => {
                 if (!values || values.length < 2) return "";
                 const width = 38;
                 const height = 16;
@@ -745,63 +745,63 @@ def generate_html_template(data_url, asset_urls):
                 const minVal = Math.min(...values);
                 const maxVal = Math.max(...values);
                 const range = maxVal - minVal || 1;
-                const points = values.map((v, i) => {{
+                const points = values.map((v, i) => {
                     const x = (i / (values.length - 1)) * (width - strokeWidth * 2) + strokeWidth;
                     const y = ((v - minVal) / range) * (height - strokeWidth * 2) + strokeWidth;
                     return [x, height - y];
-                }});
+                });
                 const mainPoints = points.slice(0, -1).map(p => p.join(",")).join(" ");
                 const lastPoints = points.slice(-2).map(p => p.join(",")).join(" ");
                 let trendColor = "#1f1b16";
-                if (slope !== null) {{
+                if (slope !== null) {
                     if (slope > 0.1) trendColor = "#1f9d55";
                     else if (slope < -0.1) trendColor = "#c2410c";
-                }}
+                }
                 return `
-                    <svg width="${{width}}" height="${{height}}" aria-hidden="true">
-                        <polyline points="${{mainPoints}}" fill="none" stroke="#1f1b16" stroke-width="${{strokeWidth}}"/>
-                        <polyline points="${{lastPoints}}" fill="none" stroke="${{trendColor}}" stroke-width="${{strokeWidth}}"/>
+                    <svg width="${width}" height="${height}" aria-hidden="true">
+                        <polyline points="${mainPoints}" fill="none" stroke="#1f1b16" stroke-width="${strokeWidth}"/>
+                        <polyline points="${lastPoints}" fill="none" stroke="${trendColor}" stroke-width="${strokeWidth}"/>
                     </svg>
                 `;
-            }};
+            };
 
-            const formatSNR = (median, q1, q3) => {{
+            const formatSNR = (median, q1, q3) => {
                 if (median === null) return "N/A";
                 const rounded = Math.round(median);
-                if (q1 === null || q3 === null) return `${{rounded}}`;
-                return `${{rounded}} <span class="iqr-text">${{Math.round(q1)}}⁄${{Math.round(q3)}}</span>`;
-            }};
+                if (q1 === null || q3 === null) return `${rounded}`;
+                return `${rounded} <span class="iqr-text">${Math.round(q1)}⁄${Math.round(q3)}</span>`;
+            };
 
-            const renderLegend = () => {{
+            const renderLegend = () => {
                 const legend = document.getElementById("legend");
                 const items = [
-                    {{ label: "Strong (>= 0 dB)", snr: 0 }},
-                    {{ label: "Moderate (-10 to 0 dB)", snr: -5 }},
-                    {{ label: "Weak (-15 to -10 dB)", snr: -12 }},
-                    {{ label: "Very weak (< -15 dB)", snr: -20 }},
+                    { label: "Strong (>= 0 dB)", snr: 0 },
+                    { label: "Moderate (-10 to 0 dB)", snr: -5 },
+                    { label: "Weak (-15 to -10 dB)", snr: -12 },
+                    { label: "Very weak (< -15 dB)", snr: -20 },
                 ];
-                legend.innerHTML = items.map(item => {{
+                legend.innerHTML = items.map(item => {
                     const color = snrToColor(item.snr, 25);
                     return `
                         <span style="display:flex;align-items:center;gap:6px;">
-                            <span class="swatch" style="background:${{color}};"></span>
-                            ${{item.label}}
+                            <span class="swatch" style="background:${color};"></span>
+                            ${item.label}
                         </span>
                     `;
-                }}).join("");
-            }};
+                }).join("");
+            };
 
-            const buildTable = (data) => {{
+            const buildTable = (data) => {
                 const thead = document.querySelector("#snr-table thead");
                 const tbody = document.querySelector("#snr-table tbody");
                 thead.innerHTML = "";
                 tbody.innerHTML = "";
 
                 const headerRow = document.createElement("tr");
-                headerRow.innerHTML = `<th>Zone</th>${{data.band_order.map(b => `<th>${{b}}m</th>`).join("")}}`;
+                headerRow.innerHTML = `<th>Zone</th>${data.band_order.map(b => `<th>${b}m</th>`).join("")}`;
                 thead.appendChild(headerRow);
 
-                data.zones.forEach(zone => {{
+                data.zones.forEach(zone => {
                     const row = document.createElement("tr");
                     const zoneCell = document.createElement("td");
                     zoneCell.textContent = zone.label;
@@ -809,11 +809,11 @@ def generate_html_template(data_url, asset_urls):
                     zoneCell.dataset.zoneName = zone.name || "Unknown Zone";
                     row.appendChild(zoneCell);
 
-                    data.band_order.forEach(band => {{
+                    data.band_order.forEach(band => {
                         const cellData = zone.bands[band];
                         const td = document.createElement("td");
                         td.className = "cell";
-                        if (cellData && cellData.count > 0) {{
+                        if (cellData && cellData.count > 0) {
                             td.style.background = snrToColor(cellData.median, cellData.count);
                             td.dataset.zone = zone.zone;
                             td.dataset.band = band;
@@ -823,29 +823,29 @@ def generate_html_template(data_url, asset_urls):
                                 <div class="cell-content">
                                     ${spark}
                                     <span>${formatSNR(cellData.median, cellData.q1, cellData.q3)}</span>
-                                    <span class="count-text">(${{cellData.count}})</span>
+                                    <span class="count-text">(${cellData.count})</span>
                                 </div>
                             `;
-                        }}
+                        }
                         row.appendChild(td);
-                    }});
+                    });
                     tbody.appendChild(row);
-                }});
-            }};
+                });
+            };
 
-            const applyTooltips = (data) => {{
+            const applyTooltips = (data) => {
                 const zoneMap = new Map(data.zones.map(z => [String(z.zone), z]));
 
-                tippy(".cell-tooltip", {{
-                    content(reference) {{
+                tippy(".cell-tooltip", {
+                    content(reference) {
                         const zoneId = reference.dataset.zone;
                         const band = reference.dataset.band;
                         const zone = zoneMap.get(zoneId);
                         if (!zone || !zone.bands[band]) return "No data";
                         const stations = zone.bands[band].stations || [];
                         if (stations.length === 0) return "No stations";
-                        return `<div class="station-list">${{stations.map(s => `<div>${{escapeHtml(s)}}</div>`).join("")}}</div>`;
-                    }},
+                        return `<div class="station-list">${stations.map(s => `<div>${escapeHtml(s)}</div>`).join("")}</div>`;
+                    },
                     allowHTML: true,
                     maxWidth: "none",
                     interactive: true,
@@ -853,12 +853,12 @@ def generate_html_template(data_url, asset_urls):
                     placement: "top",
                     theme: "light",
                     appendTo: () => document.body,
-                }});
+                });
 
-                tippy(".zone-cell", {{
-                    content(reference) {{
+                tippy(".zone-cell", {
+                    content(reference) {
                         return reference.dataset.zoneName || "Unknown Zone";
-                    }},
+                    },
                     allowHTML: false,
                     maxWidth: 350,
                     interactive: false,
@@ -866,28 +866,33 @@ def generate_html_template(data_url, asset_urls):
                     placement: "right",
                     theme: "light",
                     appendTo: () => document.body,
-                }});
-            }};
+                });
+            };
 
-            fetch(DATA_URL, {{ cache: "no-store" }})
+            fetch(DATA_URL, { cache: "no-store" })
                 .then(response => response.json())
-                .then(data => {{
+                .then(data => {
                     const meta = document.getElementById("meta");
-                    meta.textContent = `Last ${{data.span_minutes}} minutes · Updated ${{data.generated_at}}`;
+                    meta.textContent = `Last ${data.span_minutes} minutes · Updated ${data.generated_at}`;
                     renderLegend();
                     buildTable(data);
                     applyTooltips(data);
-                }})
-                .catch(err => {{
+                })
+                .catch(err => {
                     const meta = document.getElementById("meta");
                     meta.textContent = "Failed to load data.";
                     console.error(err);
-                }});
+                });
         </script>
     </body>
     </html>
     """
-    return template
+    return (
+        template.replace("__DATA_URL__", data_url)
+        .replace("__TOOLTIP_CSS__", asset_urls["tooltip_css"])
+        .replace("__TOOLTIP_JS__", asset_urls["tooltip_js"])
+        .replace("__TOOLTIP_LIB__", asset_urls["tooltip_library"])
+    )
 
 def ensure_assets(output_folder):
     assets_dir = os.path.join(output_folder, "assets")
